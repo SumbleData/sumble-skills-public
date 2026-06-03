@@ -5,6 +5,8 @@ skill produces — built against Sumble's own ICP over a universe of ~4,090 publ
 companies. Drag the sliders, watch the ranking re-sort, click a row for the
 per-signal breakdown.
 
+**▶ Live demo: https://sumble-account-scoring-demo-878803865730.us-west1.run.app**
+
 > ## ⚠️ The "gold" set here is FICTITIOUS
 >
 > The **account universe is real** (public companies and their public Sumble
@@ -37,6 +39,19 @@ port with `python app.py 9001` or `PORT=9001 python app.py`.
 
 `score.csv` is regenerated from `data.csv` + the weights on startup and on Save
 (it's git-ignored here).
+
+## Deploy your own
+
+This folder is a self-contained Cloud Run app. From here:
+
+```bash
+gcloud run deploy sumble-account-scoring-demo \
+  --source . --region us-west1 --allow-unauthenticated --memory 1Gi
+```
+
+The `Dockerfile` is trivial (stdlib only); the app reads `$PORT` and binds
+`$HOST=0.0.0.0` in the container. `score.csv` is regenerated in the container at
+startup, so only `data.csv` + the weights JSON need to ship.
 
 ## Build your own
 

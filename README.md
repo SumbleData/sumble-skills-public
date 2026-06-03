@@ -40,6 +40,8 @@ individual contacts with **people-scoring**.
 
 ### See it in action
 
+**▶ Live demo: https://sumble-account-scoring-demo-878803865730.us-west1.run.app**
+
 [`examples/account-scoring-sumble`](examples/account-scoring-sumble) is a real,
 runnable app the account-scoring skill produced — `python app.py`, drag sliders,
 click through. The account universe is real public companies; the "gold"
