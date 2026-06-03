@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>People Scoring · Sumble</title>
+  <link rel="icon" type="image/png" href="/favicon.png" />
+  <link rel="apple-touch-icon" href="/favicon.png" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <a href="https://sumble.com" class="brand" target="_blank" rel="noopener">
+      <img class="brand-icon" src="https://sumble.com/logo512.png" alt="" />
+      <img class="brand-wordmark" src="https://sumble.com/img/sumble-wordmark.svg" alt="Sumble" />
+    </a>
+    <div class="topbar-meta" id="topbar-meta"></div>
+  </header>
+
+  <main class="layout">
+    <!-- Left panel: weight sliders -->
+    <aside class="sliders-panel">
+      <div class="panel-header">
+        <h2>Score weights</h2>
+        <button id="reset-btn" class="btn-link">Reset</button>
+      </div>
+      <p class="panel-sub">Weights must sum to 100%.</p>
+      <div id="weight-sliders"></div>
+
+      <details class="accordion" id="jf-accordion">
+        <summary>Job function ranges</summary>
+        <p class="panel-sub">Min score @ IC · Max score @ CXO.</p>
+        <div id="jf-range-sliders"></div>
+      </details>
+
+      <button id="save-btn" class="btn-primary">Save weights</button>
+      <p id="save-status" class="save-status"></p>
+    </aside>
+
+    <!-- Center: tabs + tables -->
+    <section class="results-panel">
+      <nav class="tabs" id="tabs">
+        <button class="tab active" data-tab="accounts">Accounts</button>
+        <button class="tab" data-tab="people">People</button>
+        <button class="tab hidden" data-tab="eval" id="tab-btn-eval">Evaluation</button>
+      </nav>
+
+      <div id="filters-strip" class="filters-strip"></div>
+
+      <!-- Accounts tab -->
+      <div id="tab-accounts" class="tab-content">
+        <div class="table-wrap">
+          <table id="accounts-table">
+            <thead><tr>
+              <th>Account</th>
+              <th>Domain</th>
+              <th class="num">People</th>
+              <th class="num">Top score</th>
+            </tr></thead>
+            <tbody id="accounts-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- People tab -->
+      <div id="tab-people" class="tab-content hidden">
+        <div class="people-bar">
+          <div id="people-context" class="people-context"></div>
+          <div class="people-filters">
+            <div class="contact-filter-wrap hidden" id="contact-filter-wrap">
+              <label for="contact-filter">Contacts:</label>
+              <select id="contact-filter">
+                <option value="all">All people</option>
+                <option value="crm">CRM contacts</option>
+                <option value="whitespace">Whitespace</option>
+              </select>
+            </div>
+            <div class="skill-filter-wrap">
+              <label for="skill-filter">Filter by skill:</label>
+              <select id="skill-filter">
+                <option value="">All skills</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table id="people-table">
+            <thead><tr>
+              <th>Name</th>
+              <th>Account</th>
+              <th>Title</th>
+              <th>Function</th>
+              <th>Level</th>
+              <th>Skills</th>
+              <th>Location</th>
+              <th class="num">Score</th>
+            </tr></thead>
+            <tbody id="people-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Evaluation tab -->
+      <div id="tab-eval" class="tab-content hidden">
+        <div id="eval-summary" class="eval-summary"></div>
+        <div class="eval-controls">
+          <label for="eval-buckets">Buckets: <span id="eval-buckets-value">10</span></label>
+          <input id="eval-buckets" type="range" min="2" max="100" step="1" value="10" />
+        </div>
+        <div class="table-wrap">
+          <table id="eval-table">
+            <thead><tr>
+              <th class="num">Bucket</th>
+              <th class="num">People</th>
+              <th class="num">Gold</th>
+              <th class="num">% gold</th>
+              <th class="num">Cum. recall</th>
+              <th class="num">Lift</th>
+            </tr></thead>
+            <tbody id="eval-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Right panel: breakdown -->
+    <aside id="breakdown-panel" class="breakdown hidden">
+      <div class="breakdown-header">
+        <div>
+          <h2 id="bd-name"></h2>
+          <p id="bd-meta"></p>
+        </div>
+        <button id="bd-close" class="btn-icon" aria-label="Close">×</button>
+      </div>
+      <p id="bd-filters" class="bd-filters"></p>
+      <table id="bd-table">
+        <thead><tr>
+          <th>Factor</th>
+          <th class="num">Score</th>
+          <th class="num">Weight</th>
+          <th class="num">Contribution</th>
+        </tr></thead>
+        <tbody id="bd-tbody"></tbody>
+      </table>
+      <p class="bd-total" id="bd-total"></p>
+      <div class="bd-links">
+        <a id="bd-linkedin" href="#" target="_blank" rel="noopener">LinkedIn ↗</a>
+        <span class="dot">·</span>
+        <a id="bd-sumble" href="#" target="_blank" rel="noopener">Sumble ↗</a>
+      </div>
+    </aside>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,56 @@
+{
+  "customer_name": "Sumble",
+  "score_label": "Sumble people fit score",
+  "csv": "data.csv",
+  "id_column": "person_id",
+  "name_column": "name",
+  "linkedin_url_column": "linkedin_url",
+  "sumble_url_column": "sumble_url",
+
+  "account_picker": {
+    "domain_column": "domain",
+    "org_name_column": "org_name"
+  },
+
+  "table_columns": [
+    "name", "current_title", "job_function_name", "job_level",
+    "matched_skills", "skill_count", "location"
+  ],
+
+  "weights": {
+    "jf":        { "default": 38, "current": 38, "min": 0, "max": 100, "label": "Job Function (%)" },
+    "seniority": { "default": 46, "current": 46, "min": 0, "max": 100, "label": "Seniority (%)" },
+    "skills":    { "default": 16, "current": 16, "min": 0, "max": 100, "label": "Skills (%)" }
+  },
+
+  "job_function_ranges": {
+    "sales":                          { "min": 0.50, "max": 0.90, "label": "Sales" },
+    "account-executive":              { "min": 0.50, "max": 0.90, "label": "Account Executive" },
+    "sales-development-representative": { "min": 0.30, "max": 0.70, "label": "SDR" },
+    "revenue-operations":             { "min": 0.60, "max": 0.95, "label": "Revenue Operations" },
+    "marketing":                      { "min": 0.55, "max": 0.90, "label": "Marketing" }
+  },
+
+  "default_jf_range": { "min": 0.50, "max": 0.85 },
+
+  "skill_cap": 5,
+
+  "seniority": {
+    "rank_column":     "job_level_rank",
+    "max_rank_column": "max_job_level_rank"
+  },
+
+  "one_p_signals": [],
+
+  "flags": {
+    "crm_contact_column": "is_crm_contact",
+    "gold_column": "is_icp_gold"
+  },
+
+  "filters_applied": {
+    "seniority_floor_label":    "Manager and above",
+    "seniority_floor_rank":     4,
+    "icp_job_function_count":   21,
+    "icp_skill_count":          17
+  }
+}

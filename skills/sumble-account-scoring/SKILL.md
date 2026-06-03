@@ -291,12 +291,28 @@ Goal: collect the input required to produce a first version of the score. Please
 
    **Branch A — CRM uploaded.** We score a calibration **sample** of the
    CRM here; the full list is scored later by the separate scoring skill.
-   1. Confirm the calibration sample drawn from their CRM. Default 500
-      accounts. If a gold set is uploaded with enough customers, default
-      to 30% customers / 70% non-customers and ask whether to oversample
-      any segment. CRM ≤5K → match all, then sample; larger → randomly
-      sample ~5K accounts to match. Tell the user the full CRM gets
-      scored later by the separate scoring skill — no bulk MCP run.
+   1. Confirm the calibration sample drawn from their CRM. **Don't sample
+      the whole CRM uniformly** — most of a large CRM is dead weight (in a
+      100K-account CRM where only ~10K are assigned to a rep, the other
+      ~90K are usually stale/junk and not worth calibration credits).
+      Oversample the accounts that actually matter — customers and
+      rep-assigned accounts — and size the sample by what the CRM exposes:
+      - **Customers AND rep-assignment both known → recommend 5,000
+        accounts**, composed of ~33% customers (the gold set,
+        oversampled) and the remaining ~67% from rep-assigned,
+        non-customer accounts. **Exclude unassigned accounts** — they're
+        the junk tail.
+      - **No customer flag OR no rep-assignment signal → recommend 10,000
+        accounts**, drawn at random. Without a way to separate real
+        targets from junk, a larger sample compensates.
+      If the qualifying pool is smaller than the target, match all of it.
+      Ask whether to oversample any other segment. A larger sample gives a
+      more representative non-gold distribution and steadier p99
+      normalization, so the ranked list is more trustworthy (smaller
+      samples calibrate faster but rank less reliably). Surface the credit
+      cost of the chosen size upfront (~`(1 + paid-attrs + Σ
+      entity-metrics)`/org). Tell the user the full CRM gets scored later
+      by the separate scoring skill — no bulk MCP run.
    2. Ask what other (non-Sumble) data to fold in:
       - **ICP gold set** — closed-won / strong-ICP accounts; sets
         `is_icp_gold` for the Evaluation tab AND drives Step 4(a)
@@ -338,6 +354,13 @@ Goal: collect the input required to produce a first version of the score. Please
    `Opportunity`; HubSpot → `lifecyclestage=customer`; warehouse →
    `dim_accounts`/`customers`/`product_usage_*`) → confirm in one prompt →
    sample-read `LIMIT 10` and verify join keys before the full pull.
+   **Also look for a rep-assignment signal** (SF `Account.OwnerId` /
+   `Owner.Name`, HubSpot `hubspot_owner_id`, or an `owner`/`account_owner`
+   column in the export) — it drives the Q4.1 sample composition
+   (oversample customers + rep-assigned accounts; an account with a real
+   owner is one the company actually works, vs the unassigned junk tail).
+   If neither a customer flag nor an owner field is present, fall back to
+   the larger random sample (Q4.1).
 
 **Per-tag multiplier widget** is in the template (up/down-weight any tag
    at scoring time) — surface it in the app; don't enumerate tags in the
@@ -372,10 +395,12 @@ projects `{slug,…}`. Show the resolved set back to the user before fetching.
 #### Stage 2b — Write the input list
 
 - **Branch A (CRM uploaded):** write `_raw/sample.csv`
-  (`crm_account_id,name,domain[,is_gold]`) — the calibration sample (default
-  500; when a gold set exists, ~30% gold / 70% non-gold, `is_gold=1` on the
-  closed-won rows). The endpoint matches by name/url, so there is **no separate
-  `MatchOrganizations` step**.
+  (`crm_account_id,name,domain[,is_gold]`) — the calibration sample sized
+  and composed per Q4.1: **5,000** when customers + rep-assignment are both
+  known (~33% customers / ~67% rep-assigned non-customers, unassigned
+  accounts excluded), or **10,000 random** when either is unknown.
+  `is_gold=1` on the customer rows. The endpoint matches by name/url, so
+  there is **no separate `MatchOrganizations` step**.
 - **Branch B (no CRM):** no input list — Stage 2c runs in `filter` mode (the
   endpoint ranks Sumble's universe by an ICP advanced query). Put the audience
   filters from Q4-B.3 in `spec.json.universe_filters`.
