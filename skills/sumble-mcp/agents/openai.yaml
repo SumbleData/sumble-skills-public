@@ -1,0 +1,4 @@
+interface:
+  display_name: "Sumble MCP"
+  short_description: "Use Sumble MCP research flows"
+  default_prompt: "Use $sumble-mcp to work through a Sumble MCP prospecting, account-research, or list-building workflow."

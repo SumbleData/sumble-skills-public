@@ -1,5 +1,5 @@
 ---
-name: sumble-account-scoring
+name: account-scoring
 description: "Build an account-scoring web app powered by Sumble data and optional first-party data. Interviews the user about their ICP, pulls data from internal systems and possibly Sumble MCP, and generates a self-contained, zero-dependency Python + HTML/JS app at account_scoring/<company>/ with real-time slider re-weighting and an evaluation mechanism to tune the score. Outputs a config file describing the account scoring method and a Python script that allows the method to be applied across all accounts."
 ---
 
@@ -21,7 +21,7 @@ consistent between runs, more deterministic than most skills.
 
 ## When to use
 
-Trigger is `/sumble-account-scoring`
+Trigger is `/account-scoring`
 
 ## Required tools
 

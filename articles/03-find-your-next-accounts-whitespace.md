@@ -46,4 +46,4 @@ A bought "lookalike" list is built on firmographics — the same company-at-rest
 
 ---
 
-*Build this with the [`sumble-account-whitespace`](../skills/sumble-account-whitespace) skill — install instructions are in the [repo README](../README.md).*
+*Build this with the [`account-whitespace`](../skills/account-whitespace) skill — install instructions are in the [repo README](../README.md).*

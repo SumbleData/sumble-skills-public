@@ -1,5 +1,5 @@
 ---
-name: sumble-account-whitespace
+name: account-whitespace
 description: "Build a Sumble-powered account WHITESPACE app: rank the orgs in Sumble's universe that look like a strong fit for your ICP. You must upload a CRM list to remove CRM accounts from the pool (and candidates whose parent is a CRM account split into a Subsidiaries tab); the rest is net-new whitespace. Emits a config and a portable public-API score_accounts.py for scoring larger lists."
 ---
 
@@ -44,7 +44,7 @@ between runs — more deterministic than many LLM skills.
 
 Trigger on any of:
 
-- `/sumble-account-whitespace`
+- `/account-whitespace`
 - "find me whitespace accounts"
 - "rank net-new accounts I'm not selling to"
 - "who in Sumble looks like our ICP but isn't in our CRM?"
@@ -356,9 +356,9 @@ output across runs.
    columns are `is_it_services`/`is_professional_services` from Q5
    when explicitly chosen).
 
-4.5 **Import existing `/sumble-account-scoring` config? (optional, one
+4.5 **Import existing `/account-scoring` config? (optional, one
    prompt).** Ask: "Do you have an `account-scoring-weights.json`
-   from a previous `/sumble-account-scoring` run for this company?"
+   from a previous `/account-scoring` run for this company?"
    If yes, point to its path; we'll lift sections/categories/signals,
    `multipliers[]`, `tag_multipliers.active`, and per-signal `p99` from
    it, then drop the 1P categories (`product_usage`,

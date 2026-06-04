@@ -1,6 +1,6 @@
 # Example: account scoring (Sumble's own ICP)
 
-A real, runnable example of what the [`sumble-account-scoring`](../../skills/sumble-account-scoring)
+A real, runnable example of what the [`account-scoring`](../../skills/account-scoring)
 skill produces — built against Sumble's own ICP over a universe of ~4,090 public
 companies. Drag the sliders, watch the ranking re-sort, click a row for the
 per-signal breakdown.
@@ -56,7 +56,7 @@ startup, so only `data.csv` + the weights JSON need to ship.
 ## Build your own
 
 This is just example output. To build a score against *your* ICP and *your*
-accounts, install the [`sumble-account-scoring`](../../skills/sumble-account-scoring)
+accounts, install the [`account-scoring`](../../skills/account-scoring)
 skill and run it in your coding agent. The method is written up in the
 [articles](../../articles): [Part 1 — the method](../../articles/01-account-score-should-tell-a-rep-what-to-do.md)
 and [Part 2 — build it](../../articles/02-build-an-account-score-you-can-prospect-from.md).

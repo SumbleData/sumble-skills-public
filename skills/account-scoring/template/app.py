@@ -327,7 +327,7 @@ def load_state() -> dict[str, Any]:
     if not SPEC_PATH.exists():
         raise FileNotFoundError(
             f"{SPEC_PATH.name} not found at {SPEC_PATH}. "
-            "Generate via the sumble-account-scoring skill."
+            "Generate via the account-scoring skill."
         )
     config = json.loads(SPEC_PATH.read_text())
 

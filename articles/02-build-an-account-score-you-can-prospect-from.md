@@ -11,7 +11,7 @@ Part 1 argued that a good account score is the start of a prospecting conversati
 - A **Sumble account + API key** ([sumble.com/account](https://sumble.com/account)) and the **Sumble MCP** connected ([docs.sumble.com/api/mcp](https://docs.sumble.com/api/mcp)).
 - To score your own accounts: an **account list** (a CSV with `name` and `domain`) exported from your CRM, a spreadsheet, or a warehouse. If you can, add two more columns — a flag marking your **customers**, and the **account owner / rep** — so the skill focuses its calibration sample on the accounts you actually work (and skips the dead tail of the CRM).
 
-Once your tool is set up, open it and run the skill: on Claude Code type `/sumble-account-scoring`; on Codex or Cursor, ask it to use the sumble-account-scoring skill.
+Once your tool is set up, open it and run the skill: on Claude Code type `/account-scoring`; on Codex or Cursor, ask it to use the account-scoring skill.
 
 ## 1. The interview
 
@@ -22,7 +22,7 @@ This is also where you fold in your **first-party data** if you have it — mark
 ## 2. Your accounts, or net-new?
 
 - **Score your accounts:** point it at your list. It calibrates on a focused sample, not the whole CRM — most of a large CRM is stale accounts nobody works, so scoring all of it just to tune weights is wasted effort. If your export flags customers and which accounts are assigned to a rep, it samples ~5,000 (about a third your customers, the rest rep-assigned accounts); if it can't tell real targets from junk, it falls back to a larger ~10,000-account random sample. Either way you oversample the accounts that matter and don't score the whole list just to tune the weights.
-- **Find net-new:** the companion `/sumble-account-whitespace` ranks Sumble's universe by your ICP and removes the accounts you already have.
+- **Find net-new:** the companion `/account-whitespace` ranks Sumble's universe by your ICP and removes the accounts you already have.
 
 It shows a credit estimate before any large pull, then builds the app.
 
@@ -221,48 +221,37 @@ If that signal's effective weight is `wᵢ = 0.39 · 0.60 = 0.234` and it were t
 
 ## Appendix: Get set up (no prior experience needed)
 
-These coding agents are just chat apps that can run commands and edit files on your computer — you talk to them in plain English. To use the account-scoring skill you (1) install one of them, (2) connect Sumble, and (3) drop in the skill. Pick **one** tool and follow its section. Do the shared steps first.
+These coding agents are just chat apps that can run commands and edit files on your computer — you talk to them in plain English. To use the account-scoring skill you (1) install one of them, (2) install the skill with `npx skills`, and (3) connect Sumble. Pick **one** tool and follow its section. Do the shared steps first.
 
 ### Shared steps (once, for any tool)
 
 1. **Create a Sumble account and get your API key.** Sign up at [sumble.com](https://sumble.com), then copy your key from [sumble.com/account](https://sumble.com/account). Keep it handy — the skill will ask for it once and save it securely, so you never paste it into a file.
 2. **Install Python 3.10+** (only needed to run the finished app). On a Mac it's usually already installed — open Terminal and run `python3 --version`. Otherwise grab it from [python.org](https://python.org).
-3. **Download the skill** from [github.com/SumbleData/sumble-skills](https://github.com/SumbleData/sumble-skills) (the green **Code → Download ZIP** button) and unzip it. You'll find the skill at `skills/sumble-account-scoring`. The commands below assume it's at `~/Downloads/sumble-account-scoring`, so adjust the path if yours differs.
+3. **Install the skill** with `npx skills`:
+   ```bash
+   npx skills add SumbleData/sumble-skills --skill account-scoring
+   ```
+   The installer detects supported agents and asks where to install the skill. If you want a no-prompt global install for one agent, add `-g -a codex -y`, `-g -a claude-code -y`, or the matching agent name.
 4. **Have your account list ready** (recommended): a spreadsheet saved as a `.csv` with at least `name` and `domain` columns — plus, if you can, a column flagging your **customers** and one for the **account owner / rep**.
 
 ### Claude Code
 
 1. **Install it.** Follow [Anthropic's Claude Code install guide](https://docs.claude.com/en/docs/claude-code). It runs in your terminal (or inside VS Code).
-2. **Add the skill** to your personal skills folder:
-   ```bash
-   mkdir -p ~/.claude/skills
-   cp -r ~/Downloads/sumble-account-scoring ~/.claude/skills/
-   ```
-3. **Connect the Sumble MCP.** Follow [docs.sumble.com/api/mcp](https://docs.sumble.com/api/mcp) — it gives you the exact command to register Sumble with Claude Code.
-4. **Run it.** Start a new Claude Code session and type `/sumble-account-scoring`. Answer the short interview and it builds your app.
+2. **Connect the Sumble MCP.** Follow [docs.sumble.com/api/mcp](https://docs.sumble.com/api/mcp) — it gives you the exact command to register Sumble with Claude Code.
+3. **Run it.** Start a new Claude Code session and type `/account-scoring`. Answer the short interview and it builds your app.
 
 ### OpenAI Codex
 
 1. **Install it.** Install the [Codex CLI](https://developers.openai.com/codex/cli): `npm install -g @openai/codex`, then run `codex`.
-2. **Add the skill** to Codex's skills folder:
-   ```bash
-   mkdir -p ~/.codex/skills
-   cp -r ~/Downloads/sumble-account-scoring ~/.codex/skills/
-   ```
-3. **Connect the Sumble MCP.** Add the Sumble server to your Codex config (`~/.codex/config.toml`) using the connection details at [docs.sumble.com/api/mcp](https://docs.sumble.com/api/mcp).
-4. **Run it.** Start Codex in the folder where you want the app created, and ask it: *"Use the sumble-account-scoring skill to build an account score."* Codex loads the skill and runs the same interview.
+2. **Connect the Sumble MCP.** Add the Sumble server to your Codex config (`~/.codex/config.toml`) using the connection details at [docs.sumble.com/api/mcp](https://docs.sumble.com/api/mcp).
+3. **Run it.** Start Codex in the folder where you want the app created, and ask it: *"Use the account-scoring skill to build an account score."* Codex loads the skill and runs the same interview.
 
 ### Cursor
 
 1. **Install it.** Download [Cursor](https://cursor.com/downloads) — a code editor with a built-in AI agent.
-2. **Open a project folder** (File → Open Folder) where you want the app to live, then add the skill to it:
-   ```bash
-   mkdir -p .cursor/skills
-   cp -r ~/Downloads/sumble-account-scoring .cursor/skills/
-   ```
-   (Or just drag the `sumble-account-scoring` folder into the project in Cursor's sidebar.)
+2. **Open a project folder** (File → Open Folder) where you want the app to live.
 3. **Connect the Sumble MCP.** In **Cursor Settings → MCP**, add the Sumble server using the details at [docs.sumble.com/api/mcp](https://docs.sumble.com/api/mcp).
-4. **Run it.** Open the Agent (chat) panel and ask it: *"Follow the sumble-account-scoring skill to build an account score."* If it doesn't pick the skill up automatically, tell it: *"Read `.cursor/skills/sumble-account-scoring/SKILL.md` and follow it."*
+4. **Run it.** Open the Agent (chat) panel and ask it: *"Follow the account-scoring skill to build an account score."*
 
 ### When it's done (any tool)
 

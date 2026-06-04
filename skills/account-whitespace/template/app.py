@@ -364,7 +364,7 @@ def load_state() -> dict[str, Any]:
     if not WEIGHTS_PATH.exists():
         raise FileNotFoundError(
             f"account-whitespace-weights.json not found at {WEIGHTS_PATH}. "
-            "Generate via the sumble-account-whitespace skill."
+            "Generate via the account-whitespace skill."
         )
     config = json.loads(WEIGHTS_PATH.read_text())
     _migrate_list_shape_in_place(config)

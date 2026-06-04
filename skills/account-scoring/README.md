@@ -45,47 +45,22 @@ drive its score — and each signal deep-links into Sumble.
 
 ## Install & run
 
-The skill is one folder (`sumble-account-scoring/`) containing `SKILL.md`
-and `template/`. Unzip it, drop it in the right place for your tool, then
-trigger it.
-
-### Claude Code
+Install the skill with `npx skills`; the CLI detects supported agents and
+installs into the agent you choose.
 
 ```bash
-# personal (all projects):
-mkdir -p ~/.claude/skills
-cp -r sumble-account-scoring ~/.claude/skills/
+npx skills add SumbleData/sumble-skills --skill account-scoring
 ```
 
-Start a new Claude Code session, then type:
-
-```
-/sumble-account-scoring
-```
-
-### OpenAI Codex CLI
+To install globally for a specific agent without prompts:
 
 ```bash
-# personal (all projects):
-mkdir -p ~/.codex/skills
-cp -r sumble-account-scoring ~/.codex/skills/
+npx skills add SumbleData/sumble-skills --skill account-scoring -g -a codex -y
+npx skills add SumbleData/sumble-skills --skill account-scoring -g -a claude-code -y
 ```
 
-Start Codex and ask it to **"use the sumble-account-scoring skill"** (Codex
-loads skills on demand when they're relevant).
-
-### Cursor
-
-```bash
-# project-scoped, from your project root:
-mkdir -p .cursor/skills
-cp -r sumble-account-scoring .cursor/skills/
-```
-
-In Cursor's Agent (chat) panel, ask it to **"follow the sumble-account-scoring
-skill"**. If your Cursor build doesn't pick it up automatically, open the
-`sumble-account-scoring` folder in Cursor and tell the Agent:
-*"Read SKILL.md in this folder and follow it to build a Sumble account score."*
+Start a new agent session, then run `/account-scoring` in Claude Code or ask
+Codex/Cursor to **"use the account-scoring skill."**
 
 ## How it works
 

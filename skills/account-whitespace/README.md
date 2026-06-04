@@ -7,7 +7,7 @@ and the public API), uses your uploaded CRM list to exclude accounts you
 already have, and generates a self-contained, **zero-dependency** Python +
 HTML/JS app you run locally and tune with sliders.
 
-It's the companion to `/sumble-account-scoring`: build a tuned model on your
+It's the companion to `/account-scoring`: build a tuned model on your
 own accounts there, then point the same kind of model at the companies you're
 *not* selling to yet. This skill is standalone — it doesn't require or share
 state with the scoring skill. The main view is the whitespace pool; if you
@@ -49,43 +49,22 @@ score — and each signal deep-links into Sumble.
 
 ## Install & run
 
-The skill is one folder (`sumble-account-whitespace/`) containing `SKILL.md`
-and `template/`. Unzip it, drop it in the right place for your tool, then
-trigger it.
-
-### Claude Code
+Install the skill with `npx skills`; the CLI detects supported agents and
+installs into the agent you choose.
 
 ```bash
-mkdir -p ~/.claude/skills
-cp -r sumble-account-whitespace ~/.claude/skills/
+npx skills add SumbleData/sumble-skills --skill account-whitespace
 ```
 
-Start a new Claude Code session, then type:
-
-```
-/sumble-account-whitespace
-```
-
-### OpenAI Codex CLI
+To install globally for a specific agent without prompts:
 
 ```bash
-mkdir -p ~/.codex/skills
-cp -r sumble-account-whitespace ~/.codex/skills/
+npx skills add SumbleData/sumble-skills --skill account-whitespace -g -a codex -y
+npx skills add SumbleData/sumble-skills --skill account-whitespace -g -a claude-code -y
 ```
 
-Start Codex and ask it to **"use the sumble-account-whitespace skill"**.
-
-### Cursor
-
-```bash
-# from your project root:
-mkdir -p .cursor/skills
-cp -r sumble-account-whitespace .cursor/skills/
-```
-
-In Cursor's Agent (chat) panel, ask it to **"follow the sumble-account-whitespace
-skill"**. If it isn't picked up automatically, tell the Agent:
-*"Read .cursor/skills/sumble-account-whitespace/SKILL.md and follow it."*
+Start a new agent session, then run `/account-whitespace` in Claude Code or ask
+Codex/Cursor to **"use the account-whitespace skill."**
 
 ## How it works
 

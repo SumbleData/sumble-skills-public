@@ -1,5 +1,5 @@
 ---
-name: sumble-people-scoring
+name: people-scoring
 description: "Build a people-scoring web app powered by Sumble data and optional first-party data. Interviews the user about their ICP (job functions + skills via GetMyCompanyProfile), then builds a SMALL calibration sample from ~5 user-named companies so the app is ready in minutes. Generates a self-contained, zero-dependency Python + HTML/JS app at people_scoring/<company>/ with real-time slider re-weighting, plus a production score_leads.py that applies the calibrated weights to an entire enriched CRM."
 ---
 
@@ -26,7 +26,7 @@ own first-party data.
 Follow the stages exactly — input and output should be near-deterministic
 across runs.
 
-Trigger on `/sumble-people-scoring`.
+Trigger on `/people-scoring`.
 
 ## Why 5 companies for calibration
 
