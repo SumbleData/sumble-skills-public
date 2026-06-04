@@ -30,6 +30,7 @@ Use $sumble-mcp to map champions and hiring signals for Stripe.
 - prospecting
 - people, job, and technology searches
 - organization and contact-list workflows
+- account intelligence briefs
 - prompt and documentation authoring for Sumble MCP
 
 ## Notes

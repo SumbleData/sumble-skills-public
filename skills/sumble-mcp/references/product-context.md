@@ -15,6 +15,7 @@ Core themes:
 - people search and enrichment
 - hiring signal detection from job posts
 - account and contact list building
+- LLM-generated account intelligence briefs for selected target accounts
 - company profile and competitive-intelligence guidance
 
 ## Good use cases
@@ -27,9 +28,18 @@ Core themes:
 
 ## Setup outline
 
-1. Connect the Sumble integration in the MCP client.
-2. Authenticate with a Sumble account.
-3. Start with company, technology, people, or hiring questions.
+Sumble MCP currently requires a custom MCP connection.
+
+| Platform | Availability | Notes |
+|---|---|---|
+| Claude | Paid plans | Enterprise users may need an admin to allow custom connectors. Use custom connector name `Sumble` and URL `https://mcp.sumble.com`. |
+| Cursor | All plans | Add an HTTP MCP server named `sumblemcp` with URL `https://mcp.sumble.com`. |
+| Claude Code | All plans | Run `claude mcp add --transport http sumble https://mcp.sumble.com --scope user`, then authenticate from `/mcp`. |
+| ChatGPT | Paid plans | Requires dev-mode/custom app access. Create an app named `Sumble` with MCP server URL `https://mcp.sumble.com`. |
+| Gemini | Not available | Do not claim Sumble MCP is available in Gemini. |
+
+After setup, complete the Sumble auth flow and start with company, technology,
+people, or hiring questions.
 
 ## Example user prompts
 

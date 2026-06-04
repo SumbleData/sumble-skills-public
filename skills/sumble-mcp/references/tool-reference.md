@@ -17,13 +17,12 @@ Use it to pull:
 Exceptions:
 
 - checking credits with `GetAccountInformation`
-- logging out with `LogOut`
 - the user already supplied complete targeting criteria in the current session
 
 ## `reason` parameter
 
-Every Sumble tool requires a `reason: str`. Make it specific and tied to the
-actual action, not a generic placeholder.
+When a Sumble tool exposes a `reason: str` parameter, make it specific and tied
+to the actual action, not a generic placeholder.
 
 Good:
 
@@ -38,22 +37,19 @@ Bad:
 
 ## Tool inventory
 
-### Free account and setup tools
+### Free account tools
 
 | Tool | Purpose |
 |---|---|
 | `GetMyCompanyProfile` | Pull ICP, competitive landscape, key personas, and project signals. Usually call first. |
 | `GetAccountInformation` | Check API key validity, credits, and plan information. |
-| `ListTables` | Inspect DuckDB tables and columns before writing raw SQL. |
-| `LogOut` | End the current session. |
 
 ### Organization search and enrichment
 
 | Tool | Purpose | Cost |
 |---|---|---|
-| `FindOrganizations` | Search companies by technology, category, industry, employee range, location, and query DSL filters. Requires at least one of `technologies`, `technology_categories`, or `query`. | 5 credits per result |
-| `EnrichOrganization` | Deep-dive a single company for technology adoption and related job/people counts. | 5 credits per technology found |
-| `MatchOrganizations` | Resolve up to 1000 external org dicts to Sumble organization IDs. | 1 credit per match |
+| `FindMatchAndEnrichOrganizations` | Find, match, and enrich organizations in one call. Use advanced query filters or resolve supplied names, URLs, or IDs; request only the attributes and technology/job/team/people metrics needed for the task. | 1 credit per matched org + 1 per paid attribute + per-entity metric costs |
+| `GetIntelligenceBrief` | Generate an LLM sales intelligence brief for one target account from Sumble structured data. Use only after narrowing to a high-priority account. | 50 credits per completed brief |
 
 ### Jobs
 
@@ -69,7 +65,7 @@ Bad:
 |---|---|---|
 | `FindPeople` | Search people within a single organization using function, level, location, technology, and timing filters. | 1 credit per person |
 | `FindRelatedPeopleToPerson` | Find nearby people in the same org, tagged `above` or `below`. | 1 credit per person |
-| `EnrichPerson` | Return contact info and Sumble profile URL for a person. | 10 credits if found |
+| `EnrichPerson` | Get contact information for a person. At least one of `include_email` or `include_phone` is required. | 10 credits per first email reveal, 80 credits per first phone reveal; free on repeat reveals of the same type or if unavailable |
 
 ### Organization lists
 
@@ -95,11 +91,12 @@ Bad:
 |---|---|---|
 | `SearchTechnologies` | Resolve free-text technology names to Sumble slugs. Use before any `technologies` parameter. | 1 credit per search |
 
-### Raw SQL
+### Database
 
 | Tool | Purpose | Cost |
 |---|---|---|
-| `Query` | Read-only DuckDB SQL. Last resort only. Warn the user when using it. | 1 credit per 100 bytes of response |
+| `RunSqlQuery` | Read-only DuckDB SQL. Last resort only. Warn the user when using it. | 1 credit per 100 bytes of response |
+| `ListTables` | List available DuckDB tables and columns before writing raw SQL. | Free |
 
 ## Query DSL notes
 
@@ -140,7 +137,7 @@ Bad:
 - Do not combine org filters with job filters using `OR`.
 - Use full state names in country/location filters.
 - `job_title` and `job_description` are not filterable. Use function and level.
-- Prefer structured tools over `Query`.
+- Prefer structured tools over `RunSqlQuery`.
 
 ## Technology category slugs
 
@@ -155,7 +152,7 @@ Use these exact slugs with `technology_category` or `technology_categories`:
 Trigger: "here's my book, how do I prioritize it"
 
 1. Call `GetMyCompanyProfile` and hold key tier categories, job functions, and projects in memory.
-2. Call `ListOrganizationLists` and prefer a `group` list. If the user pasted raw names instead, use `MatchOrganizations`, `CreateOrganizationList`, and `AddOrganizationsToList`.
+2. Call `ListOrganizationLists` and prefer a `group` list. If the user pasted raw names instead, use `FindMatchAndEnrichOrganizations` to resolve them, then `CreateOrganizationList` and `AddOrganizationsToList`.
 3. Call `GetOrganizationList` for the chosen list.
 4. Run one cheap signal pass with `FindJobs` scoped to the list:
 
@@ -172,7 +169,8 @@ AND hiring_period EQ '3mo'
 6. Present ranked evidence and stop before deeper enrich spend. Ask which A-tier accounts to deep-dive.
 
 Budget: roughly 300 credits for a 100-account list. The key cost saver is using
-one `FindJobs` pass instead of looping `EnrichOrganization`.
+one `FindJobs` pass and only requesting expensive organization attributes or
+entity metrics after the list is narrowed.
 
 ### P2: Live demo, one account end to end
 
@@ -180,7 +178,7 @@ Trigger: demo flow, deep research to outreach in under 3 minutes
 
 1. `GetMyCompanyProfile`
 2. Get the target account from the user. Prefer domain.
-3. `EnrichOrganization(organization=<domain>, technology_categories=<key_categories>)`
+3. `FindMatchAndEnrichOrganizations` for the target domain with only the key organization attributes and entity metrics needed for the demo.
 4. `FindJobs` for key projects in the last 6 months. Fallback to key job functions in the last 3 months.
 5. `GetJobDescription` for the strongest signal.
 6. Build the account brief inline.
@@ -200,7 +198,7 @@ Trigger: "got this inbound, help me work it"
 
 1. Extract person, company, and trigger.
 2. `GetMyCompanyProfile`
-3. `EnrichOrganization` first to check fit.
+3. `FindMatchAndEnrichOrganizations` first to match the account and check fit.
 4. Stop if the account is a weak fit. Do not keep spending credits on a bad lead.
 5. `FindJobs` to identify the why-now initiative.
 6. Decide whether the MQL is the buyer, a researcher, or a referrer.
@@ -218,10 +216,10 @@ Budget: roughly 60-80 credits.
 
 1. `GetMyCompanyProfile`
 2. `SearchTechnologies`
-3. `FindOrganizations`
+3. `FindMatchAndEnrichOrganizations`
 4. `CreateOrganizationList`
 5. `AddOrganizationsToList`
-6. Optionally `EnrichOrganization` on only the top few accounts
+6. Optionally request deeper attributes or entity metrics only for the top few accounts
 
 ### Champion org mapping
 
@@ -244,15 +242,15 @@ Budget: roughly 60-80 credits.
 ### External list import
 
 1. `GetMyCompanyProfile`
-2. `MatchOrganizations`
+2. `FindMatchAndEnrichOrganizations`
 3. `CreateOrganizationList`
 4. `AddOrganizationsToList`
-5. Optional selective `EnrichOrganization`
+5. Optional selective attributes, entity metrics, or `GetIntelligenceBrief`
 
 ### Single-company deep dive
 
 1. `GetMyCompanyProfile`
-2. `EnrichOrganization`
+2. `FindMatchAndEnrichOrganizations`
 3. `FindPeople`
 4. `FindJobs`
 5. Save targets to a contact list
@@ -260,10 +258,9 @@ Budget: roughly 60-80 credits.
 ## Cost management
 
 - Free tools can be used liberally.
-- `FindOrganizations` is expensive enough that filters should be tight before the call.
-- `include_entity_details=True` on `FindOrganizations` is an expensive upgrade. Ask before using it.
-- Never loop `EnrichOrganization` over a large list.
-- `EnrichPerson` is the most expensive per-item call. Keep it to the top 2-3 targets.
-- `Query` bills by response size. Always use `LIMIT` and select only the columns you need.
+- Tighten organization filters before `FindMatchAndEnrichOrganizations`, then request only needed paid attributes and entity metrics.
+- `GetIntelligenceBrief` is 50 credits per completed brief. Use it after narrowing to a high-priority account.
+- `EnrichPerson` phone reveals are expensive. Prefer email-only when email is enough; keep contact reveals to the top 2-3 targets.
+- `RunSqlQuery` bills by response size. Always use `LIMIT` and select only the columns you need.
 - On a 402 response, direct the user to purchase more credits.
 - Always surface URLs returned by the tools.

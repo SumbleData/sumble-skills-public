@@ -19,17 +19,20 @@ planning/demoing account-research motions built on its tools.
 ## Core operating rules
 
 - Start with `GetMyCompanyProfile` unless the task is only checking account
-  info, logging out, or the user already supplied complete targeting criteria in
-  the current session.
-- Every Sumble tool call requires a meaningful, specific `reason`.
+  info or the user already supplied complete targeting criteria in the current
+  session.
+- When a Sumble tool exposes a `reason` parameter, make it meaningful and
+  specific to the action.
 - Use `SearchTechnologies` before any call that takes a `technologies`
   parameter.
-- Prefer structured tools over `Query`; use raw SQL only as a last resort and
-  warn the user that it is less curated.
-- Do not loop `EnrichOrganization` across a whole account list. Use a cheap
-  list-scoped signal pass first, then deepen only selected accounts.
-- Treat `EnrichPerson` as scarce. Enrich only the top 2-3 targets unless the
-  user explicitly wants broader spend.
+- Prefer structured tools over `RunSqlQuery`; use raw SQL only as a last resort
+  and warn the user that it is less curated.
+- Use `FindMatchAndEnrichOrganizations` for organization search, matching, and
+  enrichment. Request only the attributes and entity metrics needed for the
+  task, because matched orgs, paid attributes, and per-entity metrics all bill.
+- Treat `GetIntelligenceBrief` and `EnrichPerson` as high-cost tools. Use them
+  only for selected accounts or top 2-3 people unless the user explicitly wants
+  broader spend.
 - When the user says "my accounts" or "my territory", prefer organization lists
   with `type = group`.
 - Always surface URLs returned by the tools.
@@ -51,8 +54,8 @@ planning/demoing account-research motions built on its tools.
   not pretend it does. Use the reference to draft prompts, docs, demos, or
   implementation guidance instead.
 - Keep recommendations concrete and credit-aware. Call out when a higher-cost
-  path such as `include_entity_details`, bulk enriches, or raw SQL deserves
-  explicit user confirmation.
+  path such as paid organization attributes, per-entity metrics, phone reveals,
+  `GetIntelligenceBrief`, or raw SQL deserves explicit user confirmation.
 - If repo or runtime instructions conflict with the launch prompt, follow the
   newer repo/runtime instructions and use the prompt reference for Sumble
   domain specifics.
