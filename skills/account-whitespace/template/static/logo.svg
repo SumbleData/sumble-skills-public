@@ -1,8 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 36" role="img" aria-label="Sumble">
-  <g fill="currentColor">
-    <circle cx="14" cy="18" r="8" fill="currentColor"/>
-    <circle cx="14" cy="18" r="3" fill="#fff"/>
-    <text x="34" y="24" font-family="-apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, sans-serif" font-size="20" font-weight="700" letter-spacing="-0.02em">sumble</text>
-    <text x="124" y="23" font-family="-apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, sans-serif" font-size="12" font-weight="500" fill="#64748B">account scoring</text>
-  </g>
-</svg>

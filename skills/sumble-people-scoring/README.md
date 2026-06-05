@@ -1,8 +1,9 @@
 # Sumble People Scoring Skill
 
 > 🚧 **Work in progress.** This skill is usable but still being refined, and
-> doesn't have a written guide yet. The [account-scoring](../account-scoring)
-> and [whitespace](../account-whitespace) skills are stable.
+> doesn't have a written guide yet. The
+> [sumble-account-scoring](../sumble-account-scoring) skill (account scoring +
+> whitespace) is stable.
 
 An **Agent Skill** that turns your ideal-buyer profile into a working
 **people / lead-scoring web app**. It interviews you about your ICP (job
@@ -12,9 +13,9 @@ and generates a self-contained, **zero-dependency** Python + HTML/JS app you
 run locally and tune with sliders. It also emits a production `score_leads.py`
 that applies your calibrated weights to an entire enriched CRM of people.
 
-Where the [account-scoring](../account-scoring) and
-[whitespace](../account-whitespace) skills rank *companies*, this one
-ranks *people* — the individual leads most worth contacting.
+Where the [sumble-account-scoring](../sumble-account-scoring) skill ranks
+*companies* (your accounts and net-new whitespace), this one ranks *people* —
+the individual leads most worth contacting.
 
 This skill follows the cross-tool [Agent Skills](https://agentskills.io)
 standard, so the **same folder works in Claude Code, OpenAI Codex, and Cursor**.

@@ -1,28 +1,39 @@
 # Build an account score you can prospect from — in an afternoon
 
-*Part 2 of 3.* Part 1 — [An account score should tell a rep what to do](01-account-score-should-tell-a-rep-what-to-do.md) — lays out the method; this is how to put it in action. Part 3 — [Find your next accounts (whitespace)](03-find-your-next-accounts-whitespace.md).
+*Part 2 of 2.* Part 1 — [An account score should tell a rep what to do](01-account-score-should-tell-a-rep-what-to-do.md) — lays out the method; this is how to put it in action.
 
 Part 1 argued that a good account score is the start of a prospecting conversation, not a verdict — every number backed by people and teams a rep can see and act on. Here's how to build one against your own ICP using the Sumble account-scoring skill, which runs in Claude Code, Codex, or Cursor. You talk to it, it pulls the data, you tune with sliders. Zero-dependency Python: if `python app.py` runs, you're done.
 
 ## What you need
 
 - One of three coding agents: **Claude Code**, **OpenAI Codex**, or **Cursor**. New to these tools? Each has a plain-English, **step-by-step setup appendix at the end of this page** — start there.
-- The **Sumble account-scoring skill** — download it, drop the folder into your agent's skills folder (the appendix shows exactly where for each tool).
+- The **Sumble account-scoring skill** — install it with one `npx skills` command (the appendix shows exactly how for each tool).
 - A **Sumble account + API key** ([sumble.com/account](https://sumble.com/account)) and the **Sumble MCP** connected ([docs.sumble.com/api/mcp](https://docs.sumble.com/api/mcp)).
-- To score your own accounts: an **account list** (a CSV with `name` and `domain`) exported from your CRM, a spreadsheet, or a warehouse. If you can, add two more columns — a flag marking your **customers**, and the **account owner / rep** — so the skill focuses its calibration sample on the accounts you actually work (and skips the dead tail of the CRM).
+- To score your own accounts: an **account list** (a CSV with `name` and `domain`) exported from your CRM, a spreadsheet, or a warehouse. The skill can use up to three things, and you can hand them over as **one table with flag columns** or as **separate lists**:
+  - your **whole CRM universe** (every account),
+  - which accounts are **allocated to a rep** (an owner column, or a separate list), and
+  - your **closed-won / customers** (a flag, or a separate list).
 
-Once your tool is set up, open it and run the skill: on Claude Code type `/account-scoring`; on Codex or Cursor, ask it to use the account-scoring skill.
+  None are required — with nothing, the skill scores Sumble's universe — but closed-won is the one worth digging up: it powers the evaluation that checks your known-good accounts actually rise to the top. Rep allocation lets the skill flag accounts that *should* be owned but aren't.
+
+Once your tool is set up, open it and run the skill: on Claude Code type `/sumble-account-scoring`; on Codex or Cursor, ask it to use the sumble-account-scoring skill.
 
 ## 1. The interview
 
-Short and scripted. It pulls a first draft of your **ICP** — personas, technologies, projects — from your Sumble profile, and you edit it in plain English until it's right. The score blends fit/size with buying-window intent by default — that's the baked-in best practice, so there's nothing to choose. Just say "include funding signals" if a recent raise tends to precede buying in your market.
+Short and scripted. It pulls a first draft of your **ICP** — personas, technologies, projects — from your Sumble profile, and you edit it in plain English until it's right. Just say "include funding signals" if a recent raise tends to precede buying in your market.
 
-This is also where you fold in your **first-party data** if you have it — marketing engagement (webinars, whitepapers, events) and PLG usage of your free product. Point the skill at a CSV (or a connected source) keyed by account and those become weighted factors right alongside the Sumble signals.
+It also proposes the score's **segments** — the top-level lenses it breaks the number into. The default is three: **Size** (how big the opportunity is), **Concentration** (how strong the fit is), and **Growth & momentum** (whether now is the time). Keep them, reweight them, or redefine them — the skill will suggest a **business-unit breakdown** if you sell distinct product lines (e.g. an OCI-fit segment and an Apps-fit segment, each scored on its own personas and tech). A signal can sit in more than one segment when it belongs to both.
 
-## 2. Your accounts, or net-new?
+This is also where you fold in your **first-party data** if you have it — marketing engagement (webinars, whitepapers, events) and PLG usage of your free product. Point the skill at a CSV (or a connected source) keyed by account and those become weighted factors right alongside the Sumble signals — woven into whichever segment fits, or a segment of their own.
 
-- **Score your accounts:** point it at your list. It calibrates on a focused sample, not the whole CRM — most of a large CRM is stale accounts nobody works, so scoring all of it just to tune weights is wasted effort. If your export flags customers and which accounts are assigned to a rep, it samples ~5,000 (about a third your customers, the rest rep-assigned accounts); if it can't tell real targets from junk, it falls back to a larger ~10,000-account random sample. Either way you oversample the accounts that matter and don't score the whole list just to tune the weights.
-- **Find net-new:** the companion `/account-whitespace` ranks Sumble's universe by your ICP and removes the accounts you already have.
+## 2. Which accounts to score
+
+Every account lands in one **category** — `customer` (closed-won), `allocated` (in CRM, owned by a rep), `unallocated` (in CRM, no owner), or `whitespace` (a strong-fit org *not* in your CRM). The app shows that category as a column and lets you filter on it, so one ranked list serves territory planning, allocation gaps, and net-new all at once.
+
+- **Up to ~5,000 accounts:** it scores them all.
+- **More than that:** scoring the entire CRM burns credits and time (and most of a large CRM is stale accounts nobody works), so it asks how to narrow — everything, just the rep-allocated accounts, a subset you specify, or a **stratified sample** it draws for you (≈30% closed-won, 40% rep-allocated, 30% unallocated). The sample oversamples the accounts that matter and gives the evaluation a representative mix.
+- **Whitespace, optionally folded in:** say yes and it ranks strong-fit orgs that *aren't* in your CRM — resolving your whole CRM universe to exclude what you already have — and drops them into the same sheet tagged `whitespace`, so you can filter to net-new without leaving the app. It defaults to **10,000** candidates, and the ranking itself is free (only the final pool costs credits to enrich), drawn from a **diversified preselection** — a mix of orgs hiring for your key technologies, running your key projects, dense in your ICP personas, and *growing* those personas fastest — so the pool isn't just the biggest companies. Candidates whose **parent** is already a CRM account are flagged as land-and-expand rather than cold net-new. Whitespace runs the Sumble-only half of your model (a stranger has no first-party signals to join, so those weights drop and the rest re-normalize), and the same gold-set calibration carries straight over.
+- **No lists at all:** it scores Sumble's universe against your ICP.
 
 It shows a credit estimate before any large pull, then builds the app.
 
@@ -35,9 +46,11 @@ python app.py        # http://localhost:8001
 
 Drag the sliders and the ranking re-sorts instantly. Open any account for a per-signal breakdown — and this is where the score becomes actionable: **each signal deep-links into Sumble**, filtered to the entities behind it. "DevOps engineer headcount" → the actual engineers. "Teams using Jenkins" → those teams. The buying-window signal → the recent job posts. A rep goes from score to named contacts and talking points in two clicks.
 
+If you loaded CRM lists, the **category chips** above the table filter to customers, allocated, unallocated, or whitespace in one click — so you can pull up "high-scoring accounts with no rep" (allocation gaps) or "top whitespace" without exporting anything. The slider weights you choose apply across every category at once.
+
 **Which way to lean.** By default account scores tilt toward big companies — they have more of every signal, so raw counts float them up. The sliders are split exactly so you can correct that on purpose. Selling into small, fast-growing companies? Turn the *growth* sliders up — especially ICP-persona growth. Fast growers cross new scale points often, and each one is a moment they outgrow a tool and start looking; a large, flat company usually isn't in enough pain to switch. Want accounts where your product is central rather than incidental? Turn *concentration* up — a high share of your ICP persona, or of teams on the relevant tech, means you're core to how the company runs, not a rounding error. Then let the Evaluation tab tell you whether the tilt actually pulled your won deals up.
 
-**It fits to your wins — carefully.** Mark your closed-won accounts as your *gold* set and the skill calibrates to them automatically, two ways. It sets the **attribute multipliers** — whatever's over-represented among your wins (digital-native, say) earns a boost, whatever's under-represented (IT-services partners) a penalty. And it **fits the weights themselves**: starting from a thoughtful set of defaults, a small solver nudges the section blend and category weights to separate your gold accounts better. It's built *not* to overfit — it only touches the high-level weights (the per-signal weights stay frozen), shrinks every change back toward the defaults, cross-validates on held-out wins, and keeps the result only if it generalizes; on a thin gold set it doesn't move at all. The sliders open at those fitted values — a warm start, still entirely yours to tune. The **Evaluation tab** shows the payoff: it buckets the scored sample and reports how many gold accounts land near the top (a *lift* above 1.0 beats random). Drag, watch the gold rise, then **Save** — it writes your tuned weights and a `data.csv` with every account's score and rank. Nothing auto-saves.
+**It fits to your wins — carefully.** Mark your closed-won accounts as your *gold* set and the skill calibrates to them automatically, two ways. It sets the **attribute and industry multipliers** — whatever's over-represented among your wins (digital-native companies, or a whole industry like Fintech) earns a boost, whatever's under-represented (IT-services partners, or an industry your customers never come from) a penalty. These are *applied* by default — the app opens with them on, and you can tune or drop any in the per-tag widget, or add ones the gold set is too small to find ("we don't sell to Defense — penalize it"). And it **fits the weights themselves**: starting from a thoughtful set of defaults, a small solver nudges the segment blend and category weights to separate your gold accounts better. It's built *not* to overfit — it only touches the high-level weights (the per-signal weights stay frozen), shrinks every change back toward the defaults, cross-validates on held-out wins, and keeps the result only if it generalizes; on a thin gold set it doesn't move at all. The sliders open at those fitted values — a warm start, still entirely yours to tune. The **Evaluation tab** shows the payoff: it buckets the scored sample and reports how many gold accounts land near the top (a *lift* above 1.0 beats random). It also breaks down **where each category lands in the overall ranking** — mean, median, and spread of rank for customers, allocated, unallocated, and whitespace — so you can confirm at a glance that your customers cluster near the top and see how your whitespace and unallocated accounts stack up against them. Drag, watch the gold rise, then **Save** — it writes your tuned weights and one complete `score.csv`: every account's data, score, rank, category, per-signal contributions, and deep links in a single file (the raw `data.csv` stays untouched as the archive). Nothing auto-saves.
 
 ## 4. Score your whole book — and keep it fresh
 
@@ -75,9 +88,7 @@ What you hand reps is the **rank**, not the raw score — "your #3 account" beat
 
 Say you sell a platform-engineering tool to DevOps and infrastructure teams. Run the skill against your CRM and within an afternoon you can see that your customers skew digital-native and recently-funded, that Kubernetes footprint predicts fit better than headcount, and that a recent raise plus an active cloud-migration initiative is your strongest "buy now" combination. You tune until the Evaluation tab confirms it, Save, and run the portable scorer across all 90,000 accounts in one run.
 
-And because every signal links straight into the people, teams, and jobs behind it, the ranked list isn't a leaderboard — it's a prospecting queue with the next action already attached.
-
-**[Part 3 — Use the same model to find the best accounts you're *not* selling to →](03-find-your-next-accounts-whitespace.md)**
+And because every signal links straight into the people, teams, and jobs behind it, the ranked list isn't a leaderboard — it's a prospecting queue with the next action already attached. The same skill, run in whitespace mode, turns it on the accounts you're *not* selling to yet — same model, minus the first-party signals a stranger can't have.
 
 ---
 
@@ -121,30 +132,35 @@ The `(1 − exp(−1))` divisor rescales so an account sitting exactly at p99 sc
 Weights are a three-level tree. Every level's children sum to 100%, so the leaf weights automatically form a probability distribution — no global re-normalization needed when you drag one slider.
 
 ```text
-Section            ACV (size+fit) 60%     |  Intent (buying window) 40%
-  Category         persona count, persona growth, persona concentration,
-                   tech team count, tech team concentration   (each a % of its section)
-    Signal         one persona / one tech / one project       (each a % of its category)
+Segment            Size 50%        |  Growth & momentum 30%  |  Concentration 20%
+  Category         persona count,     persona growth,          persona concentration,
+                   tech team count,   funding momentum         tech team concentration
+                   project×tech/persona jobs, funding total
+                                                  (each a % of its segment)
+    Signal         one persona / one tech / one project   (each a % of its category)
 ```
 
 The **effective weight** of signal `i` is the product of its three fractions:
 
 ```text
-wᵢ = (sectionPct[sec(i)] / 100) · (catPct[cat(i)] / 100) · (withinPct[i] / 100)
+wᵢ = (segmentPct[seg(i)] / 100) · (catPct[cat(i)] / 100) · (withinPct[i] / 100)
 ```
 
 with `Σ wᵢ = 1`. Defaults the skill ships with:
 
-- **Sections:** ACV 60 / Intent 40.
-- **ACV categories** (% of ACV): persona count 39, persona growth 16.25, persona concentration 9.75, tech team count 24.5, tech team concentration 10.5.
-- **Intent categories** (% of Intent): project×tech jobs 60, project×persona jobs 40.
+- **Segments:** Size 50 / Growth & momentum 30 / Concentration 20.
+- **Size categories** (% of Size, before renormalizing over those present): persona count 45, tech team count 30, project×tech jobs 15, project×persona jobs 10, funding total 12.
+- **Concentration categories** (% of Concentration): persona concentration 60, tech team concentration 40.
+- **Growth & momentum categories** (% of segment): persona YoY growth 100, funding momentum 30.
 - **Within a category**, multiple personas/techs/projects get **decaying** weights (geometric, ratio `0.98`), so the 1st-listed persona slightly outweighs the 5th rather than all being equal. "Other"-tier techs are additionally dropped by a factor of `0.6` below the key-tier techs.
+
+(Categories absent for your spec — project×* with no projects, funding unless you opt in — drop out and the rest renormalize to 100 within their segment. The whole taxonomy is overridable: rename, reweight, or recut the segments, including a per-business-unit split, and a signal may appear in more than one segment.)
 
 (When `score_accounts.py` runs against the public API, any signal the API can't reproduce — e.g. tech-team *concentration*, which needs an org-total team count — is dropped and the surviving `wᵢ` are re-normalized to sum to 1. So API scores rank-correlate strongly with the app but aren't byte-identical.)
 
 ### Step 4 — Calibration multipliers (lift over your won deals)
 
-Categorical attributes (tags like `b2b`, `digital_native`, `it_services`, `professional_services`, …) aren't normalized signals — they're **multipliers** learned from your gold set (closed-won accounts). For each attribute, compare its prevalence among gold accounts to the broader population:
+Categorical attributes (tags like `b2b`, `digital_native`, `it_services`, `professional_services`, …) and **whole industry classifications** (each account's industry is treated as an `industry__<slug>` tag) aren't normalized signals — they're **multipliers** learned from your gold set (closed-won accounts). For each, compare its prevalence among gold accounts to the broader population:
 
 ```text
 lift = P(attr | gold) / P(attr | universe)
@@ -172,13 +188,13 @@ Because `Σ wᵢ = 1` and each `nᵢ ∈ [0,1]`, the weighted sum is in `[0,1]` 
 
 ### Step 6 — Rank (the interface)
 
-The raw `score(a)` is the engine; what reps see is the **rank** — accounts sorted by score descending. Rank is computed *within segments* (size band, territory) when one is chosen, so the model still scores every account globally but the ordering is reset per segment. The exported `data.csv` carries both `score` and `rank`.
+The raw `score(a)` is the engine; what reps see is the **rank** — accounts sorted by score descending. Rank is computed *within a territory* (size band, geography) when one is chosen, so the model still scores every account globally but the ordering is reset per territory. The exported `score.csv` carries `score`, `rank`, and each account's `account_category` alongside the raw data and per-signal contributions.
 
 ### How the default weights are set (a regularized fit to gold)
 
 The default weights aren't hand-typed guesses — they're thoughtful priors, then nudged toward your closed-won (`is_icp_gold`) accounts by a small solver built to avoid overfitting:
 
-- Only the **section blend and category weights** are fit; the within-category signal weights stay frozen — that caps the degrees of freedom (≈6 parameters, not dozens).
+- Only the **segment blend and category weights** are fit; the within-category signal weights stay frozen — that caps the degrees of freedom (a handful of parameters, not dozens).
 - The objective is `AUC(gold) − λ · ‖w − w_default‖²` — a ranking fit *shrunk toward the priors*, so a weight moves only when the gold evidence is strong enough.
 - Each weight is **box-bounded** (±10 pts per category, ±15 pts on the blend), so the model stays recognizable.
 - λ is chosen by **k-fold cross-validation on held-out gold**, and the fit is **adopted only if held-out AUC beats the priors** by ≥ 0.01. With fewer than ~40 gold accounts it doesn't run at all.
@@ -194,13 +210,13 @@ x̃ = ln(1+12) = 2.565
 n  = (1 − exp(−2.565/3.71)) / (1 − exp(−1)) = (1 − 0.500) / 0.632 = 0.791
 ```
 
-If that signal's effective weight is `wᵢ = 0.39 · 0.60 = 0.234` and it were the only signal, its contribution is `100 · 0.234 · 0.791 = 18.5` points. A `digital_native` tag with lift `1.5` adds a boost of `round((1.5−1)·30) = 15%`, taking the score to `18.5 · 1.15 = 21.3`.
+If that signal's effective weight is `wᵢ = 0.50 (Size) · 0.45 (persona count) = 0.225` and it were the only signal, its contribution is `100 · 0.225 · 0.791 = 17.8` points. A `digital_native` tag with lift `1.5` adds a boost of `round((1.5−1)·30) = 15%`, taking the score to `17.8 · 1.15 = 20.5`.
 
 ### Reference constants
 
 | Constant | Value | Role |
 |---|---|---|
-| Section blend | ACV 60 / Intent 40 | top-level split of "how big" vs "how now" |
+| Segment blend | Size 50 / Growth & momentum 30 / Concentration 20 | top-level lenses (overridable; empty segments drop + renormalize) |
 | Saturation divisor | `1 − exp(−1) ≈ 0.632` | makes p99 map to exactly 1.0 |
 | p99 floor | `1e-9` | avoids divide-by-zero when no positives exist |
 | Persona/tech within-decay | `0.98` (geometric) | ranks listed entities instead of equal-weighting |
@@ -211,7 +227,7 @@ If that signal's effective weight is `wᵢ = 0.39 · 0.60 = 0.234` and it were t
 | Min gold positives | `3` | below this, attribute is neutral |
 | Min universe positives | `5` | below this, attribute is neutral |
 | Intent window | `90 days` | recency window for job-post intent signals |
-| Weight-fit scope | section blend + category weights | within-category weights frozen |
+| Weight-fit scope | segment blend + category weights | within-category weights frozen |
 | Weight-fit objective | `AUC(gold) − λ·‖w − w₀‖²` | ranking fit, shrunk to priors |
 | Category / blend bands | `±10` / `±15` pts | max drift of a fitted weight from default |
 | Weight-fit adopt margin | `+0.01` held-out AUC | else keep the priors |
@@ -229,29 +245,29 @@ These coding agents are just chat apps that can run commands and edit files on y
 2. **Install Python 3.10+** (only needed to run the finished app). On a Mac it's usually already installed — open Terminal and run `python3 --version`. Otherwise grab it from [python.org](https://python.org).
 3. **Install the skill** with `npx skills`:
    ```bash
-   npx skills add SumbleData/sumble-skills --skill account-scoring
+   npx skills add SumbleData/sumble-skills --skill sumble-account-scoring
    ```
-   The installer detects supported agents and asks where to install the skill. If you want a no-prompt global install for one agent, add `-g -a codex -y`, `-g -a claude-code -y`, or the matching agent name.
+   The installer detects your coding agents and asks where to install. For a no-prompt global install into one agent, add `-g -a claude-code -y`, `-g -a codex -y`, or the matching agent name.
 4. **Have your account list ready** (recommended): a spreadsheet saved as a `.csv` with at least `name` and `domain` columns — plus, if you can, a column flagging your **customers** and one for the **account owner / rep**.
 
 ### Claude Code
 
 1. **Install it.** Follow [Anthropic's Claude Code install guide](https://docs.claude.com/en/docs/claude-code). It runs in your terminal (or inside VS Code).
 2. **Connect the Sumble MCP.** Follow [docs.sumble.com/api/mcp](https://docs.sumble.com/api/mcp) — it gives you the exact command to register Sumble with Claude Code.
-3. **Run it.** Start a new Claude Code session and type `/account-scoring`. Answer the short interview and it builds your app.
+3. **Run it.** Start a new Claude Code session and type `/sumble-account-scoring`. Answer the short interview and it builds your app.
 
 ### OpenAI Codex
 
 1. **Install it.** Install the [Codex CLI](https://developers.openai.com/codex/cli): `npm install -g @openai/codex`, then run `codex`.
 2. **Connect the Sumble MCP.** Add the Sumble server to your Codex config (`~/.codex/config.toml`) using the connection details at [docs.sumble.com/api/mcp](https://docs.sumble.com/api/mcp).
-3. **Run it.** Start Codex in the folder where you want the app created, and ask it: *"Use the account-scoring skill to build an account score."* Codex loads the skill and runs the same interview.
+3. **Run it.** Start Codex in the folder where you want the app created, and ask it: *"Use the sumble-account-scoring skill to build an account score."* Codex loads the skill and runs the same interview.
 
 ### Cursor
 
 1. **Install it.** Download [Cursor](https://cursor.com/downloads) — a code editor with a built-in AI agent.
 2. **Open a project folder** (File → Open Folder) where you want the app to live.
 3. **Connect the Sumble MCP.** In **Cursor Settings → MCP**, add the Sumble server using the details at [docs.sumble.com/api/mcp](https://docs.sumble.com/api/mcp).
-4. **Run it.** Open the Agent (chat) panel and ask it: *"Follow the account-scoring skill to build an account score."*
+4. **Run it.** Open the Agent (chat) panel and ask it: *"Follow the sumble-account-scoring skill to build an account score."*
 
 ### When it's done (any tool)
 

@@ -53,12 +53,13 @@ def main() -> None:
 
     key = os.environ.get("SUMBLE_API_KEY")
     if not key:
+        print("Get your Sumble API key at https://sumble.com/account (Account → API key).")
         try:
-            key = getpass.getpass("Paste your Sumble API key (input hidden): ").strip()
+            key = getpass.getpass("Paste it here (input hidden): ").strip()
         except (EOFError, KeyboardInterrupt):
-            sys.exit("\nNo key entered — nothing saved.")
+            sys.exit("\nNo key entered — nothing saved. Get one at https://sumble.com/account")
     if not key:
-        sys.exit("No key entered — nothing saved.")
+        sys.exit("No key entered — nothing saved. Get one at https://sumble.com/account")
     dest = sumble_v6.save_api_key(key)
     print(f"Saved to {dest} (permissions 0600).")
     print("fetch_data.py and score_accounts.py will now find it automatically.")

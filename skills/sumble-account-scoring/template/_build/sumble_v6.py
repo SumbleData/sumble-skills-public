@@ -87,7 +87,13 @@ def resolve_api_key(env_file: str | None = None, allow_prompt: bool = False) -> 
     if file_key:
         return file_key
     if allow_prompt and sys.stdin.isatty():
-        entered = getpass.getpass("Paste your Sumble API key (input hidden): ").strip()
+        sys.stderr.write(
+            "\nGet your Sumble API key at https://sumble.com/account "
+            "(Account → API key).\n"
+        )
+        entered = getpass.getpass(
+            "Paste it here (hidden; saved for next time): "
+        ).strip()
         if entered:
             dest = save_api_key(entered)
             sys.stderr.write(f"[key] saved to {dest}\n")
@@ -111,6 +117,16 @@ ATTRIBUTES = [
     "tags",
 ]
 
+# Funding attributes, requested only when spec["include_funding"] is set. Each
+# costs 1 credit per matched org. total/last-round amounts drive the funding
+# scoring signals; type/date are carried for context (display, not scored).
+FUNDING_ATTRIBUTES = [
+    "funding_total_raised",
+    "funding_last_round_raised",
+    "funding_last_round_type",
+    "funding_last_round_date",
+]
+
 
 def since_3mo(today: _dt.date | None = None) -> str:
     """The `since` date (YYYY-MM-DD) ~3 months before `today` for intent signals.
@@ -122,6 +138,19 @@ def since_3mo(today: _dt.date | None = None) -> str:
     return d.isoformat()
 
 
+def days_since(date_str: object, today: _dt.date | None = None) -> object:
+    """Whole days between an ISO date string and today (min 1), or "" if absent
+    / unparseable. Used for the funding recency signal; "" → 0 → no recency."""
+    if not date_str:
+        return ""
+    try:
+        d = _dt.date.fromisoformat(str(date_str)[:10])
+    except ValueError:
+        return ""
+    today = today or _dt.date.today()
+    return max(1, (today - d).days)
+
+
 def _q(value: str) -> str:
     """Single-quote a DSL literal, escaping any embedded single quotes."""
     return "'" + value.replace("'", "''") + "'"
@@ -131,8 +160,23 @@ def _in_list(values: list[str]) -> str:
     return "(" + ", ".join(_q(v) for v in values) + ")"
 
 
-def intent_tech_query(project_slug: str, tech_slugs: list[str]) -> str:
-    return f"project EQ {_q(project_slug)} AND technology IN {_in_list(tech_slugs)}"
+def tech_clause(techs: list[dict]) -> str:
+    """DSL clause matching any of the techs — individual slugs via `technology IN`
+    and predefined categories (kind == 'category') via `technology_category IN`."""
+    cats = [t["slug"] for t in techs if t.get("kind") == "category"]
+    indiv = [t["slug"] for t in techs if t.get("kind") != "category"]
+    parts = []
+    if indiv:
+        parts.append(f"technology IN {_in_list(indiv)}")
+    if cats:
+        parts.append(f"technology_category IN {_in_list(cats)}")
+    if not parts:
+        return ""
+    return parts[0] if len(parts) == 1 else "(" + " OR ".join(parts) + ")"
+
+
+def intent_tech_query(project_slug: str, techs: list[dict]) -> str:
+    return f"project EQ {_q(project_slug)} AND {tech_clause(techs)}"
 
 
 def intent_persona_query(project_slug: str, persona_names: list[str]) -> str:
@@ -156,7 +200,6 @@ def entity_plan(spec: dict, since: str | None = None) -> list[dict[str, Any]]:
     personas = spec["personas"]
     techs = spec["techs"]
     projects = spec.get("projects") or []
-    tech_slugs = [t["slug"] for t in techs]
     persona_names = [p["name"] for p in personas]
 
     plan: list[dict[str, Any]] = []
@@ -182,14 +225,16 @@ def entity_plan(spec: dict, since: str | None = None) -> list[dict[str, Any]]:
             }
         )
     for t in techs:
+        is_cat = t.get("kind") == "category"
         plan.append(
             {
                 "col": f"{t['slug']}_teams",
-                "type": "technology",
+                "type": "technology_category" if is_cat else "technology",
                 "term": t["slug"],
                 "metric": "team_count",
                 "scale": 1.0,
                 "since": None,
+                "granularity": "aggregate" if is_cat else None,
             }
         )
     if projects:
@@ -198,7 +243,7 @@ def entity_plan(spec: dict, since: str | None = None) -> list[dict[str, Any]]:
                 {
                     "col": f"{proj['slug']}_x_relevant_tech_jobposts",
                     "type": "advanced_query",
-                    "term": intent_tech_query(proj["slug"], tech_slugs),
+                    "term": intent_tech_query(proj["slug"], techs),
                     "metric": "job_post_count",
                     "scale": 1.0,
                     "since": since,
@@ -225,6 +270,7 @@ def build_select(spec: dict, since: str | None = None) -> dict[str, Any]:
     """
     plan = entity_plan(spec, since)
     by_key: dict[tuple[str, str, str | None], set[str]] = {}
+    gran: dict[tuple[str, str, str | None], str | None] = {}
     order: list[tuple[str, str, str | None]] = []
     for item in plan:
         key = (item["type"], item["term"], item["since"])
@@ -232,6 +278,8 @@ def build_select(spec: dict, since: str | None = None) -> dict[str, Any]:
             by_key[key] = set()
             order.append(key)
         by_key[key].add(item["metric"])
+        if item.get("granularity"):
+            gran[key] = item["granularity"]
 
     entities: list[dict[str, Any]] = []
     for etype, term, since_val in order:
@@ -242,8 +290,13 @@ def build_select(spec: dict, since: str | None = None) -> dict[str, Any]:
         }
         if since_val:
             ent["since"] = since_val
+        if gran.get((etype, term, since_val)):
+            ent["granularity"] = gran[(etype, term, since_val)]
         entities.append(ent)
-    return {"attributes": list(ATTRIBUTES), "entities": entities}
+    attributes = list(ATTRIBUTES)
+    if spec.get("include_funding"):
+        attributes += FUNDING_ATTRIBUTES
+    return {"attributes": attributes, "entities": entities}
 
 
 def index_entities(resp_row: dict) -> dict[tuple[str, str], dict]:
@@ -287,6 +340,13 @@ def build_data_row(
     tags = list(attrs.get("tags") or [])
     if industry == "Professional Services" and "professional_services" not in tags:
         tags.append("professional_services")
+    # Synthesize the org's industry as a calibratable tag (`industry__<slug>`) so
+    # the gold-lift calibration can boost/penalize whole industries and the per-tag
+    # widget can tune them. Skip Professional Services — already its own tag above.
+    if industry and industry != "Professional Services":
+        ind_slug = "industry__" + re.sub(r"[^a-z0-9]+", "_", industry.lower()).strip("_")
+        if ind_slug != "industry__" and ind_slug not in tags:
+            tags.append(ind_slug)
     # employee_count is the endpoint's exact integer headcount (band-string
     # midpoint only as a legacy fallback). teams_count / jobs_count are org-total
     # attributes used as concentration denominators and shown as firmographics.
@@ -328,11 +388,24 @@ def build_data_row(
         row[f"{t['slug']}_team_pct"] = (
             round(100.0 * teams / org_teams, 3) if org_teams else 0.0
         )
+
+    # Funding columns (only when requested). total/last-round amounts are scored;
+    # type/date are display context. Missing values become 0 / "" so the columns
+    # are always present and numeric for the scorer.
+    if spec.get("include_funding"):
+        row["funding_total_raised"] = int(_f(attrs.get("funding_total_raised")))
+        row["funding_last_round_raised"] = int(_f(attrs.get("funding_last_round_raised")))
+        row["funding_last_round_type"] = attrs.get("funding_last_round_type") or ""
+        last_round_date = attrs.get("funding_last_round_date") or ""
+        row["funding_last_round_date"] = last_round_date
+        # Recency: whole days since the latest round ("" when never financed →
+        # scored as 0). The `recency` transform inverts this (fewer days = higher).
+        row["funding_days_since_last_round"] = days_since(last_round_date)
     return row
 
 
 def _exact_employee_count(attrs: dict) -> int:
-    """Exact org headcount from the `employee_count` attribute.
+    """Exact org headcount from the endpoint's `employee_count` attribute.
 
     The /v6/organizations endpoint returns `employee_count` as an exact integer
     (e.g. 2615). For resilience we also accept the older band-string form

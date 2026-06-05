@@ -1,8 +1,9 @@
-// Sumble account-whitespace UI.
+// Sumble account-scoring UI.
 // Fetches /api/data once; recomputes scores client-side on slider change.
-// Whitespace pool (top-N Sumble orgs by fit, CRM matches excluded
-// upstream). A Subsidiaries tab appears when rows carry list_type
-// "crm_subsidiary" (orgs whose parent is a CRM account).
+// Top-level: category sliders sum to 100%.
+// Within each category (accordion): signal sliders sum to 100% of that category.
+// Score per signal = (cat_pct/100) * (within_pct/100) * norm_value
+// Final score = (sum of contributions) * (1 - sum(penalty_pct * flag)) * 100
 
 const PAGE_SIZE = 100;
 
@@ -12,6 +13,14 @@ const PAGE_SIZE = 100;
 //       signal% (sum to 100 within each category)
 //   effective per-signal weight = section × category × signal / 10000
 // When sections is absent, sectionPct stays empty and category% sums to 100 globally.
+//
+// UI-side: when a section has exactly one category, we collapse its
+// rendering to a 2-level hierarchy (section -> signals) — the lone
+// category's slider would always be 100% with nothing to redistribute
+// against, so the third level adds noise. The category still exists in
+// state.catPct (value pinned to 100) so the scoring formula above is
+// unchanged; only the accordion is skipped. Sections with 2+ categories
+// keep the full 3-level UI.
 const state = {
   config: null,
   rows: [],
@@ -24,34 +33,63 @@ const state = {
   expanded: {},      // category_key -> bool
   sectionExpanded: {}, // section_key -> bool (default collapsed)
   selectedId: null,
+  tab: "accounts",
+  hiddenCategories: new Set(), // account_category values toggled OFF (filtered out)
+  evalBuckets: 10,
   search: "",
+  sizeMin: null, // employee_count_int >= this; null = no lower bound
+  sizeMax: null, // employee_count_int <= this; null = no upper bound
   page: 0,
-  savedWeights: null, // weights loaded from account-whitespace-weights.json
-  tabs: ["whitespace"], // list_types present + "eval", in display order
-  tab: "whitespace",    // active tab
-  evalBuckets: 10,      // slider value for the Evaluation tab
+  savedWeights: null, // weights loaded from account-scoring-weights.json
 };
 
-const TAB_LABELS = {
-  whitespace: "Whitespace",
-  crm_subsidiary: "Subsidiaries",
-  eval: "Evaluation",
-};
+// Column used by the employee-size filter. If the loaded data lacks this
+// column, the filter widget is hidden in setup() — see SIZE_FILTER_COL.
+const SIZE_FILTER_COL = "employee_count_int";
+
 const TAB_DESCRIPTIONS = {
-  whitespace: "High-fit Sumble accounts not in your CRM. Net-new prospects, ranked by fit.",
-  crm_subsidiary:
-    "Subsidiaries whose parent is a CRM account — land-and-expand targets, ranked by fit.",
-  eval:
-    "Score-bucket diagnostics for whitespace candidates: employee-size mix " +
-    "(SMB/Mid/Enterprise) and attribute mix (tags + penalty flags) per bucket. " +
-    "Use to sanity-check what the current weights are picking — e.g. is the top " +
-    "decile all Enterprise, or does it skew B2C unexpectedly?",
+  accounts: "Accounts ranked by fit.",
+  whitespace: "Accounts ranked by fit.",
+  eval: "How the score behaves across your accounts. The first table shows where each account category (customers, rep-allocated, unallocated, whitespace) lands in the overall ranking — customers should sit near the top, and whitespace surfaces your best net-new targets. Below, accounts are split into equal-size score buckets (top bucket = highest-scoring): “Gold-set lift by bucket” shows how many of your known customers each bucket captures (lift > 1.0 = better than picking at random), and the size / attribute mixes show how firmographics shift from high to low scorers.",
 };
 
-// Rows for the active tab. With a single list_type the whole universe shows.
-function tabRows() {
-  if (!state.tabs || state.tabs.length < 2) return state.rows;
-  return state.rows.filter((r) => (r.list_type || "whitespace") === state.tab);
+// account_category → display label. The Category column + filter chips appear
+// only when ≥2 distinct categories are present (config.has_categories).
+const CATEGORY_LABELS = {
+  customer: "Customer / gold",
+  allocated: "Allocated to rep",
+  unallocated: "CRM, unallocated",
+  whitespace: "Whitespace",
+  whitespace_subsidiary: "Whitespace (parent in CRM)",
+};
+const CATEGORY_ORDER = [
+  "customer", "allocated", "unallocated", "whitespace", "whitespace_subsidiary",
+];
+
+function rowCategory(row) {
+  if (isGold(row)) return "customer";
+  return String(row.account_category || "");
+}
+
+// Pretty display for tag-multiplier tags. `industry__hospital_health_care` →
+// "Industry: Hospital Health Care"; common attribute tags get a clean label;
+// everything else shows the raw slug.
+const TAG_DISPLAY = {
+  b2b: "B2B",
+  b2c: "B2C",
+  digital_native: "Digital-native",
+  is_ai_native: "AI-native",
+  it_services: "IT services",
+  professional_services: "Professional services",
+};
+function tagLabel(tag) {
+  const t = String(tag || "");
+  if (t.startsWith("industry__")) {
+    const words = t.slice("industry__".length).split("_").filter(Boolean);
+    const titled = words.map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+    return "Industry: " + titled;
+  }
+  return TAG_DISPLAY[t] || t;
 }
 
 // ---------- DOM helpers ----------
@@ -108,13 +146,15 @@ function buildSumbleLink(base, slug, spec) {
   if (groups.length === 0) return url;
   const as = { operator: "AND", children: groups };
   const params = new URLSearchParams();
-  // Sumble Lead Score sort applies to people-ranking pages (/people,
-  // /trends/job_functions_people). /jobs doesn't carry this sort.
+  params.set("as", JSON.stringify(as));
+  // Append the page's canonical sort. /jobs has no default sort.
   if (path.includes("people")) {
     params.set("sort", "Sumble Lead Score");
     params.set("desc", "1");
+  } else if (path === "/teams") {
+    params.set("sort", "Tech jobs");
+    params.set("desc", "1");
   }
-  params.set("as", JSON.stringify(as));
   return `${url}?${params.toString()}`;
 }
 
@@ -185,9 +225,13 @@ function redistribute(values, key, next, total = 100) {
 
 // ---------- Scoring ----------
 
+// True only when ≥2 sections are configured. With a single section the
+// section wrapper is redundant (it'd be a fixed 100% slider above one
+// category pool), so we render categories flat and treat section_weight
+// as 1.0 in the scoring formula — same behaviour as a no-sections config.
 function hasSections() {
   const s = state.config && state.config.sections;
-  return !!(s && Object.keys(s).length > 0);
+  return !!(s && Object.keys(s).length > 1);
 }
 
 function sectionOf(catKey) {
@@ -258,11 +302,12 @@ function parseRowTags(row) {
 }
 
 function rankedRows() {
-  const ranked = tabRows()
+  // Rank ALL accounts together (one global rank), so a customer's rank reflects
+  // its position among everything — the same rank the Evaluation tab reports.
+  // Category chips + search then filter the displayed slice without renumbering.
+  const ranked = state.rows
     .map((r) => ({ row: r, score: rowScore(r) }))
     .sort((a, b) => b.score - a.score);
-  // Assign rank (1-based) BEFORE any search filtering, so a search query
-  // never renumbers the rank column.
   ranked.forEach((entry, i) => {
     entry.rank = i + 1;
   });
@@ -272,9 +317,22 @@ function rankedRows() {
 function filteredRanked() {
   const ranked = rankedRows();
   const q = (state.search || "").trim().toLowerCase();
-  if (!q) return ranked;
   const cols = state.config.table_columns || [];
+  const sMin = state.sizeMin;
+  const sMax = state.sizeMax;
+  const sizeActive = sMin != null || sMax != null;
+  const hidden = state.config.has_categories ? state.hiddenCategories : null;
+  const catActive = hidden && hidden.size > 0;
+  if (!q && !sizeActive && !catActive) return ranked;
   return ranked.filter(({ row }) => {
+    if (catActive && hidden.has(rowCategory(row))) return false;
+    if (sizeActive) {
+      const emp = Number(row[SIZE_FILTER_COL]);
+      if (!Number.isFinite(emp)) return false;
+      if (sMin != null && emp < sMin) return false;
+      if (sMax != null && emp > sMax) return false;
+    }
+    if (!q) return true;
     for (const c of cols) {
       const v = row[c];
       if (v != null && String(v).toLowerCase().includes(q)) return true;
@@ -285,8 +343,65 @@ function filteredRanked() {
 
 // ---------- Render: category accordion ----------
 
-// Build one category accordion card. Used both for the flat layout and,
-// when config.sections is present, nested inside a section group.
+// Build one signal-row (label + within-category slider). Used both
+// inside a category-card body and (when a section has exactly one
+// category) directly inside a section-body — the latter collapses
+// the redundant 100%-only category accordion into a 2-level
+// section -> signal hierarchy.
+function makeSignalRow(catKey, signal, totalSignalsInCat) {
+  const { key, spec } = signal;
+  const within = (state.withinPct[catKey] || {})[key] || 0;
+  const wPct = el(
+    "span",
+    { class: "signal-pct" },
+    fmtFloat(within, 1) + "%",
+  );
+
+  const wSlider = el("input", {
+    type: "range",
+    min: "0",
+    max: "100",
+    step: "0.5",
+    value: String(within),
+    oninput: (e) => {
+      const v = Number(e.target.value);
+      state.withinPct[catKey] ||= {};
+      const actual = redistribute(state.withinPct[catKey], key, v, 100);
+      e.target.value = String(actual);
+      renderWithinPcts(catKey);
+      renderTable();
+      if (state.selectedId) updateBreakdown();
+      scheduleAutoSave();
+    },
+  });
+  if (totalSignalsInCat <= 1) wSlider.disabled = true;
+
+  // Flag signals that can't be reproduced from the public Sumble API.
+  // They still count in the app's full model, but a public-API-only
+  // production scorer drops them and re-normalises weights.
+  const labelChildren = [el("span", { class: "label-text" }, spec.label)];
+  if (spec.api_supported === false) {
+    const reason =
+      (spec.source && spec.source.api_unsupported_reason) ||
+      spec.api_unsupported_reason ||
+      "No public Sumble API endpoint exposes this — calibration only, not reproducible by the API-only production scorer.";
+    labelChildren.push(
+      el("span", { class: "api-badge", title: reason }, "SQL-only"),
+    );
+  }
+  labelChildren.push(wPct);
+
+  return el(
+    "div",
+    { class: "signal-row", "data-cat": catKey, "data-signal": key },
+    el("label", {}, ...labelChildren),
+    wSlider,
+  );
+}
+
+// Build one category accordion card. Used inside a section that has
+// 2+ categories; sections with a single category bypass this and
+// render signals directly via makeSignalRow.
 function makeCategoryCard(catKey, catSpec, grouped) {
   const signals = grouped[catKey] || [];
   const isEmpty = signals.length === 0;
@@ -304,7 +419,7 @@ function makeCategoryCard(catKey, catSpec, grouped) {
         renderCategories();
       },
     },
-    el("span", { class: "disclosure" }, "▶"),
+    el("span", { class: "disclosure" }),
     el("span", { class: "category-title" }, catSpec.label || catKey),
     pctSpan,
   );
@@ -340,50 +455,8 @@ function makeCategoryCard(catKey, catSpec, grouped) {
     body.appendChild(el("p", { class: "category-desc" }, catSpec.description));
   }
 
-  for (const { key, spec } of signals) {
-    const within = (state.withinPct[catKey] || {})[key] || 0;
-    const wPct = el("span", { class: "signal-pct" }, fmtFloat(within, 1) + "%");
-
-    const wSlider = el("input", {
-      type: "range",
-      min: "0",
-      max: "100",
-      step: "0.5",
-      value: String(within),
-      oninput: (e) => {
-        const v = Number(e.target.value);
-        state.withinPct[catKey] ||= {};
-        const actual = redistribute(state.withinPct[catKey], key, v, 100);
-        e.target.value = String(actual);
-        renderWithinPcts(catKey);
-        renderTable();
-        if (state.selectedId) updateBreakdown();
-        scheduleAutoSave();
-      },
-    });
-    if (signals.length <= 1) wSlider.disabled = true;
-
-    // Flag signals the public-API scorer (score_accounts.py) can't
-    // reproduce; they still count here but are dropped by the script.
-    const labelChildren = [el("span", { class: "label-text" }, spec.label)];
-    if (spec.api_supported === false) {
-      const reason =
-        (spec.source && spec.source.api_unsupported_reason) ||
-        spec.api_unsupported_reason ||
-        "No public Sumble API endpoint exposes this — calibration only, dropped by score_accounts.py.";
-      labelChildren.push(
-        el("span", { class: "api-badge", title: reason }, "SQL-only"),
-      );
-    }
-    labelChildren.push(wPct);
-
-    const row = el(
-      "div",
-      { class: "signal-row", "data-cat": catKey, "data-signal": key },
-      el("label", {}, ...labelChildren),
-      wSlider,
-    );
-    body.appendChild(row);
+  for (const signal of signals) {
+    body.appendChild(makeSignalRow(catKey, signal, signals.length));
   }
 
   return el(
@@ -406,11 +479,12 @@ function renderCategories() {
   const container = document.getElementById("categories");
   container.innerHTML = "";
 
-  const hasSecs = sections && Object.keys(sections).length > 0;
+  const hasSecs = hasSections();
   if (hasSecs) {
     // Top-level section sliders (sum to 100). Each section is a
     // collapsible card; categories inside sum to 100% of that section.
     // Sections default to collapsed so the panel opens compact.
+    // (A single section is treated as no sections; see hasSections().)
     const placed = new Set();
     for (const [secKey, secSpec] of Object.entries(sections)) {
       const expanded = !!state.sectionExpanded[secKey];
@@ -435,7 +509,7 @@ function renderCategories() {
               renderCategories();
             },
           },
-          el("span", { class: "disclosure" }, "▶"),
+          el("span", { class: "disclosure" }),
           el("span", { class: "section-title" }, secSpec.label || secKey),
           secPct,
         ),
@@ -466,10 +540,26 @@ function renderCategories() {
       if (secSpec.description) {
         body.appendChild(el("p", { class: "section-desc" }, secSpec.description));
       }
-      for (const [catKey, catSpec] of Object.entries(cats)) {
-        if (catSpec.section !== secKey) continue;
+      // Auto-collapse: if a section has exactly one category, the
+      // category slider would be a fixed-100% no-op (a third level
+      // with nothing to redistribute). Render its signals directly
+      // inside section-body as a 2-level hierarchy. Sections with
+      // 2+ categories keep the full 3-level accordion.
+      const secCats = Object.entries(cats).filter(
+        ([, c]) => c.section === secKey,
+      );
+      if (secCats.length === 1) {
+        const [catKey] = secCats[0];
         placed.add(catKey);
-        body.appendChild(makeCategoryCard(catKey, catSpec, grouped));
+        const signals = grouped[catKey] || [];
+        for (const signal of signals) {
+          body.appendChild(makeSignalRow(catKey, signal, signals.length));
+        }
+      } else {
+        for (const [catKey, catSpec] of secCats) {
+          placed.add(catKey);
+          body.appendChild(makeCategoryCard(catKey, catSpec, grouped));
+        }
       }
       group.appendChild(body);
       container.appendChild(group);
@@ -516,11 +606,15 @@ function renderSectionPcts() {
 }
 
 function renderWithinPcts(catKey) {
-  const card = document.querySelector(`.category[data-cat="${catKey}"]`);
-  if (!card) return;
+  // Scope by data-cat + data-signal directly rather than under a
+  // .category[data-cat="..."] wrapper — sections collapsed to a
+  // 2-level hierarchy have no .category card, but signal-rows always
+  // carry both data attributes regardless of which wrapper holds them.
   const withins = state.withinPct[catKey] || {};
   for (const [signalKey, pct] of Object.entries(withins)) {
-    const row = card.querySelector(`.signal-row[data-signal="${signalKey}"]`);
+    const row = document.querySelector(
+      `.signal-row[data-cat="${catKey}"][data-signal="${signalKey}"]`,
+    );
     if (!row) continue;
     const span = row.querySelector(".signal-pct");
     if (span) span.textContent = fmtFloat(pct, 1) + "%";
@@ -541,7 +635,7 @@ function renderTagMultipliers() {
     const taken = new Set(state.tagMult.map((m) => m.tag));
     for (const t of state.availableTags) {
       if (taken.has(t.tag)) continue;
-      list.appendChild(el("option", { value: t.tag, label: `${t.tag} (${t.count})` }));
+      list.appendChild(el("option", { value: t.tag, label: `${tagLabel(t.tag)} (${t.count})` }));
     }
   }
 
@@ -593,7 +687,7 @@ function renderTagMultipliers() {
         "div",
         { class: "multiplier-row tag-mult-row" },
         el("label", {},
-          el("span", { class: "tag-mult-chip" }, entry.tag),
+          el("span", { class: "tag-mult-chip", title: entry.tag }, tagLabel(entry.tag)),
           valueSpan,
         ),
         slider,
@@ -626,6 +720,7 @@ function renderMultipliers() {
         valueSpan.textContent = `${e.target.value}%`;
         renderTable();
         if (state.selectedId) updateBreakdown();
+        scheduleAutoSave();
       },
     });
     wrap.appendChild(
@@ -639,16 +734,17 @@ function renderMultipliers() {
   }
 }
 
-// ---------- Eval tab: score-bucket composition diagnostics ----------
-//
-// Whitespace has no gold-set lift table (CRM accounts are excluded from the
-// candidate pool, so there's nothing to "recover"). What IS valuable: bucket
-// the whitespace candidates by their current score and inspect HOW the score
-// correlates with employee-size + tag attributes. Lets the user spot
-// pathological weight tunings ("my top decile is all <50-employee b2c orgs").
+// ---------- Render: results table ----------
 
-// Employee-size bands matching Sumble's CTFP page (sumble.com /company/<x>/ctfp):
-// SMB / Mid-Market / Enterprise. Ordered large -> small for top-to-bottom read.
+function isGold(row) {
+  const v = row.is_icp_gold;
+  return v === 1 || v === true || v === "1" || v === "True" || v === "true";
+}
+
+// Employee-size bands for the eval diagnostics (ordered large -> small).
+// Each band: { key, label, test(employee_count_int) }. Cut points match
+// Sumble's CTFP page (sumble.com /company/<x>/ctfp): SMB / Mid-Market /
+// Enterprise.
 const SIZE_BANDS = [
   { key: "enterprise", label: "Enterprise (1,001+)", test: (e) => e >= 1001 },
   { key: "mid_market", label: "Mid-Market (201–1,000)", test: (e) => e >= 201 && e <= 1000 },
@@ -678,7 +774,7 @@ const EVAL_ATTRS = [
 ];
 
 function sizeBandKey(row) {
-  const e = Number(row.employee_count_int);
+  const e = Number(row[SIZE_FILTER_COL]);
   if (!Number.isFinite(e)) return null;
   for (const b of SIZE_BANDS) if (b.test(e)) return b.key;
   return null;
@@ -689,12 +785,11 @@ function rowHasAttr(row, attr) {
   return attr.tag ? parseRowTags(row).has(attr.tag) : false;
 }
 
-// Build a "% of each bucket" diagnostic table: one row per bucket, one column
-// per category, cell = share of the bucket in that category.
+// Build a "% of each bucket" diagnostic table: one row per bucket,
+// one column per category, cell = share of the bucket in that category.
 function renderBucketComposition(tableId, buckets, columns, classify) {
   const thead = document.querySelector(`#${tableId} thead`);
   const tbody = document.querySelector(`#${tableId} tbody`);
-  if (!thead || !tbody) return;
   thead.innerHTML = "";
   tbody.innerHTML = "";
 
@@ -708,7 +803,7 @@ function renderBucketComposition(tableId, buckets, columns, classify) {
     const counts = {};
     for (const c of columns) counts[c.key] = 0;
     for (const x of b.slice) {
-      const hits = classify(x.row);
+      const hits = classify(x.row); // array of column keys this row belongs to
       for (const k of hits) if (k in counts) counts[k] += 1;
     }
     const tr = el("tr");
@@ -717,6 +812,7 @@ function renderBucketComposition(tableId, buckets, columns, classify) {
     for (const c of columns) {
       const pct = b.n > 0 ? (100 * counts[c.key]) / b.n : 0;
       const cell = el("td", { class: "num" }, pct.toFixed(0) + "%");
+      // Subtle heat: stronger text as share rises.
       if (pct >= 50) cell.style.fontWeight = "600";
       if (pct === 0) cell.style.color = "#bbb";
       tr.appendChild(cell);
@@ -725,67 +821,193 @@ function renderBucketComposition(tableId, buckets, columns, classify) {
   }
 }
 
+// --- rank-distribution summary statistics, per account category ------------
+
+function _quantile(sorted, q) {
+  if (!sorted.length) return 0;
+  const pos = (sorted.length - 1) * q;
+  const lo = Math.floor(pos);
+  const hi = Math.ceil(pos);
+  if (lo === hi) return sorted[lo];
+  return sorted[lo] + (sorted[hi] - sorted[lo]) * (pos - lo);
+}
+
+function _rankStats(ranks, total) {
+  const n = ranks.length;
+  const sorted = ranks.slice().sort((a, b) => a - b);
+  const mean = ranks.reduce((s, r) => s + r, 0) / n;
+  const variance = ranks.reduce((s, r) => s + (r - mean) ** 2, 0) / n;
+  // Mean percentile from the top (100 = always ranked #1; higher is better).
+  const denom = Math.max(1, total - 1);
+  const meanPct =
+    (ranks.reduce((s, r) => s + (1 - (r - 1) / denom), 0) / n) * 100;
+  return {
+    n,
+    mean,
+    median: _quantile(sorted, 0.5),
+    std: Math.sqrt(variance),
+    p25: _quantile(sorted, 0.25),
+    p75: _quantile(sorted, 0.75),
+    best: sorted[0],
+    worst: sorted[sorted.length - 1],
+    meanPct,
+  };
+}
+
+// Where each account category lands in the GLOBAL ranking (all rows scored
+// together). Lets you see at a glance that customers cluster near the top and
+// whitespace/unallocated sit where they should. `scored` is sorted best-first.
+function renderRankByCategory(scored) {
+  const section = document.getElementById("eval-category-section");
+  if (!section) return;
+  if (!state.config.has_categories) {
+    section.classList.add("hidden");
+    return;
+  }
+  section.classList.remove("hidden");
+  const total = scored.length;
+  const ranksByCat = {};
+  scored.forEach((x, i) => {
+    const c = rowCategory(x.row);
+    (ranksByCat[c] ||= []).push(i + 1);
+  });
+
+  const thead = document.querySelector("#eval-category-table thead");
+  const tbody = document.querySelector("#eval-category-table tbody");
+  thead.innerHTML = "";
+  tbody.innerHTML = "";
+  const heads = ["Category", "N", "Mean", "Median", "Std", "P25", "P75",
+                 "Best", "Worst", "Mean %ile"];
+  const trh = el("tr");
+  trh.appendChild(el("th", {}, heads[0]));
+  for (const h of heads.slice(1)) trh.appendChild(el("th", { class: "num" }, h));
+  thead.appendChild(trh);
+
+  for (const key of state.config.categories_present || []) {
+    const ranks = ranksByCat[key];
+    if (!ranks || !ranks.length) continue;
+    const s = _rankStats(ranks, total);
+    const tr = el("tr");
+    tr.appendChild(
+      el("td", {}, el("span", { class: "cat-pill cat-" + key }, CATEGORY_LABELS[key] || key)),
+    );
+    tr.appendChild(el("td", { class: "num" }, fmtInt(s.n)));
+    tr.appendChild(el("td", { class: "num" }, fmtInt(Math.round(s.mean))));
+    tr.appendChild(el("td", { class: "num" }, fmtInt(Math.round(s.median))));
+    tr.appendChild(el("td", { class: "num" }, fmtInt(Math.round(s.std))));
+    tr.appendChild(el("td", { class: "num" }, fmtInt(Math.round(s.p25))));
+    tr.appendChild(el("td", { class: "num" }, fmtInt(Math.round(s.p75))));
+    tr.appendChild(el("td", { class: "num" }, fmtInt(s.best)));
+    tr.appendChild(el("td", { class: "num" }, fmtInt(s.worst)));
+    const pctCell = el("td", { class: "num" }, s.meanPct.toFixed(1) + "%");
+    if (s.meanPct >= 70) pctCell.style.color = "var(--accent, #16A34A)";
+    tr.appendChild(pctCell);
+    tbody.appendChild(tr);
+  }
+}
+
 function renderEval() {
   document.getElementById("results-table").classList.add("hidden");
-  const pag = document.getElementById("pagination");
-  if (pag) pag.classList.add("hidden");
   document.getElementById("eval-view").classList.remove("hidden");
 
-  // Score and rank the whitespace candidates (the rows the score is meant to
-  // rank). CRM subsidiaries are excluded — they're a separate ranked list and
-  // their composition isn't what the user is calibrating the whitespace score
-  // on. If no whitespace rows exist, fall back to whatever is loaded.
-  const candidatePool = state.rows.filter(
-    (r) => (r.list_type || "whitespace") === "whitespace",
-  );
-  const pool = candidatePool.length ? candidatePool : state.rows;
-  const scored = pool
-    .map((r) => ({ row: r, score: rowScore(r) }))
+  const scored = state.rows
+    .map((r) => ({ row: r, score: rowScore(r), gold: isGold(r) ? 1 : 0 }))
     .sort((a, b) => b.score - a.score);
   const total = scored.length;
+  const totalGold = scored.reduce((s, x) => s + x.gold, 0);
+  const baseline = total > 0 ? totalGold / total : 0;
 
   const N_BUCKETS = Math.max(2, Math.min(100, state.evalBuckets || 10));
   const buckets = [];
+  let cumGold = 0;
   for (let i = 0; i < N_BUCKETS; i++) {
     const start = Math.floor((i * total) / N_BUCKETS);
     const end = Math.floor(((i + 1) * total) / N_BUCKETS);
     const slice = scored.slice(start, end);
-    buckets.push({ idx: i + 1, n: slice.length, start, end, slice });
+    const n = slice.length;
+    const gold = slice.reduce((s, x) => s + x.gold, 0);
+    cumGold += gold;
+    const hitRate = n > 0 ? gold / n : 0;
+    const cumRecall = totalGold > 0 ? cumGold / totalGold : 0;
+    const lift = baseline > 0 ? hitRate / baseline : 0;
+    buckets.push({ idx: i + 1, n, gold, hitRate, cumRecall, lift, start, end, slice });
   }
+
+  const hasGold = totalGold > 0;
+  const goldSection = document.getElementById("eval-gold-section");
+  if (goldSection) goldSection.classList.toggle("hidden", !hasGold);
 
   const summary = document.getElementById("eval-summary");
-  if (summary) {
-    summary.textContent =
-      `${total.toLocaleString()} whitespace candidates scored · ` +
-      `${N_BUCKETS} buckets · composition vs current weights`;
+  summary.textContent = hasGold
+    ? `${total.toLocaleString()} scored · ${totalGold} gold (is_icp_gold=1) · ` +
+      `baseline gold rate ${(baseline * 100).toFixed(2)}%`
+    : `${total.toLocaleString()} scored · no gold set loaded — ` +
+      `gold-lift table hidden; size & attribute diagnostics below apply to all rows`;
+
+  const thead = document.querySelector("#eval-table thead");
+  thead.innerHTML = "";
+  const trh = el("tr");
+  trh.appendChild(el("th", { class: "num" }, "Bucket"));
+  trh.appendChild(el("th", { class: "num" }, "Rank range"));
+  trh.appendChild(el("th", { class: "num" }, "Accounts"));
+  trh.appendChild(el("th", { class: "num" }, "Gold"));
+  trh.appendChild(el("th", { class: "num" }, "% gold"));
+  trh.appendChild(el("th", { class: "num" }, "Cum. recall"));
+  trh.appendChild(el("th", { class: "num" }, "Lift"));
+  thead.appendChild(trh);
+
+  const tbody = document.querySelector("#eval-table tbody");
+  tbody.innerHTML = "";
+  for (const b of buckets) {
+    const tr = el("tr");
+    tr.appendChild(el("td", { class: "num" }, String(b.idx)));
+    tr.appendChild(el("td", { class: "num" }, `${b.start + 1}–${b.end}`));
+    tr.appendChild(el("td", { class: "num" }, fmtInt(b.n)));
+    tr.appendChild(el("td", { class: "num" }, fmtInt(b.gold)));
+    tr.appendChild(el("td", { class: "num" }, (b.hitRate * 100).toFixed(2) + "%"));
+    tr.appendChild(el("td", { class: "num" }, (b.cumRecall * 100).toFixed(1) + "%"));
+    const liftCell = el("td", { class: "num" }, fmtFloat(b.lift, 2) + "×");
+    if (b.lift >= 2) liftCell.style.color = "var(--accent, #16A34A)";
+    if (b.lift < 1) liftCell.style.color = "#999";
+    tr.appendChild(liftCell);
+    tbody.appendChild(tr);
   }
 
+  // Diagnostic 0: where each account category lands in the global ranking.
+  renderRankByCategory(scored);
+
+  // Diagnostic 1: employee-size mix by bucket.
   renderBucketComposition("eval-size-table", buckets, SIZE_BANDS, (row) => {
     const k = sizeBandKey(row);
     return k ? [k] : [];
   });
+
+  // Diagnostic 2: attribute mix by bucket (a row can hit multiple).
   renderBucketComposition("eval-attr-table", buckets, EVAL_ATTRS, (row) =>
     EVAL_ATTRS.filter((a) => rowHasAttr(row, a)).map((a) => a.key),
   );
 
-  const desc = document.getElementById("tab-description");
-  if (desc) desc.textContent = TAB_DESCRIPTIONS.eval;
+  document.getElementById("tab-description").textContent =
+    TAB_DESCRIPTIONS[state.tab] || "";
   document.getElementById("row-summary").textContent =
-    `${total.toLocaleString()} whitespace candidates · ${N_BUCKETS}-bucket evaluation`;
+    `${total.toLocaleString()} accounts · ${totalGold} gold · bucket evaluation`;
 }
 
-// ---------- Render: results table ----------
-
 function renderTable() {
+  const catFilter = document.getElementById("category-filter");
   if (state.tab === "eval") {
-    document.getElementById("search-wrap")?.classList.add("hidden");
+    document.getElementById("search-wrap").classList.add("hidden");
+    document.getElementById("pagination").classList.add("hidden");
+    // Category chips don't filter the eval diagnostics, so hide them here.
+    if (catFilter) catFilter.classList.add("hidden");
     return renderEval();
   }
-  // Restore non-eval views when switching away.
-  document.getElementById("results-table")?.classList.remove("hidden");
-  document.getElementById("pagination")?.classList.remove("hidden");
-  document.getElementById("eval-view")?.classList.add("hidden");
-  document.getElementById("search-wrap")?.classList.remove("hidden");
+  document.getElementById("results-table").classList.remove("hidden");
+  document.getElementById("search-wrap").classList.remove("hidden");
+  document.getElementById("pagination").classList.remove("hidden");
+  if (catFilter && state.config.has_categories) catFilter.classList.remove("hidden");
+  const evalView = document.getElementById("eval-view");
+  if (evalView) evalView.classList.add("hidden");
 
   const ranked = filteredRanked();
   const total = ranked.length;
@@ -802,6 +1024,7 @@ function renderTable() {
   if (!thead.dataset.built) {
     const tr = el("tr");
     tr.appendChild(el("th", { class: "num" }, "Rank"));
+    if (state.config.has_categories) tr.appendChild(el("th", {}, "Category"));
     for (const col of state.config.table_columns) tr.appendChild(el("th", {}, col));
     tr.appendChild(el("th", { class: "num" }, state.config.score_label || "Score"));
     thead.appendChild(tr);
@@ -816,9 +1039,19 @@ function renderTable() {
     });
     if (state.selectedId === String(row[state.config.id_column])) tr.classList.add("selected");
     tr.appendChild(el("td", { class: "num rank-cell" }, String(rank)));
+    if (state.config.has_categories) {
+      const cat = rowCategory(row);
+      tr.appendChild(
+        el(
+          "td",
+          {},
+          el("span", { class: "cat-pill cat-" + (cat || "none") }, CATEGORY_LABELS[cat] || "—"),
+        ),
+      );
+    }
     state.config.table_columns.forEach((col) => {
       let val = row[col];
-      if (col === "url" && val) {
+      if ((col === "url" || col === "crm_url") && val) {
         // bare-domain → clickable external link in a new tab
         const href = /^https?:\/\//i.test(String(val)) ? String(val) : "https://" + String(val);
         const cell = el("td");
@@ -837,6 +1070,9 @@ function renderTable() {
     tbody.appendChild(tr);
   });
 
+  document.getElementById("tab-description").textContent =
+    TAB_DESCRIPTIONS[state.tab] || "";
+
   const pageInfo = document.getElementById("page-info");
   if (total === 0) {
     pageInfo.textContent = "no results";
@@ -848,53 +1084,14 @@ function renderTable() {
   document.getElementById("page-prev").disabled = state.page <= 0;
   document.getElementById("page-next").disabled = state.page >= totalPages - 1;
 
-  const filteredNote = state.search ? ` · filtered: ${total.toLocaleString()}` : "";
-  const noun = state.tab === "crm_subsidiary" ? "CRM subsidiaries" : "whitespace accounts";
-  document.getElementById("row-summary").textContent =
-    `${tabRows().length.toLocaleString()} ${noun}${filteredNote}`;
-}
-
-// ---------- Render: list tabs (Whitespace / Subsidiaries) ----------
-
-function renderTabs() {
-  const wrap = document.getElementById("list-tabs");
-  if (!wrap) return;
-  const desc = document.getElementById("tab-description");
-  if (desc) desc.textContent = TAB_DESCRIPTIONS[state.tab] || TAB_DESCRIPTIONS.whitespace;
-  if (!state.tabs || state.tabs.length < 2) {
-    wrap.classList.add("hidden");
-    return;
-  }
-  wrap.classList.remove("hidden");
-  wrap.innerHTML = "";
-  for (const t of state.tabs) {
-    // Eval is a view-mode tab, not a list_type filter — no row count.
-    const label =
-      t === "eval"
-        ? TAB_LABELS.eval
-        : `${TAB_LABELS[t] || t} (${state.rows
-            .filter((r) => (r.list_type || "whitespace") === t)
-            .length.toLocaleString()})`;
-    wrap.appendChild(
-      el(
-        "button",
-        {
-          type: "button",
-          class: "list-tab" + (t === state.tab ? " active" : ""),
-          onClick: () => {
-            if (state.tab === t) return;
-            state.tab = t;
-            state.page = 0;
-            state.selectedId = null;
-            document.getElementById("breakdown-panel")?.classList.add("hidden");
-            renderTabs();
-            renderTable();
-          },
-        },
-        label,
-      ),
-    );
-  }
+  const crmCount = state.rows.filter((r) => r.in_crm).length;
+  const sizeActive = state.sizeMin != null || state.sizeMax != null;
+  const filterActive = state.search || sizeActive;
+  const filteredNote = filterActive ? ` · filtered: ${total.toLocaleString()}` : "";
+  const summary = state.config.has_crm
+    ? `${state.rows.length.toLocaleString()} accounts · ${crmCount.toLocaleString()} in CRM${filteredNote}`
+    : `${state.rows.length.toLocaleString()} accounts${filteredNote}`;
+  document.getElementById("row-summary").textContent = summary;
 }
 
 // ---------- Render: per-row breakdown ----------
@@ -929,6 +1126,7 @@ function updateBreakdown() {
     if (v != null && v !== "") metaBits.push(String(v));
   }
   metaBits.push(`Score ${fmtFloat(score, 1)}`);
+  if (row.in_crm) metaBits.push("in CRM");
 
   const meta = document.getElementById("breakdown-meta");
   meta.textContent = metaBits.join(" · ");
@@ -1013,6 +1211,115 @@ function updateBreakdown() {
   }
 }
 
+// ---------- Render: category filter chips ----------
+
+// Multi-select category filter: each chip toggles its category in/out (filter
+// any combination). A chip is "active" (highlighted) when shown; click to hide
+// it. The "All" chip clears the filter (shows everything). Per-category counts
+// are static (membership doesn't change with weights), so this renders once.
+function renderCategoryChips() {
+  const wrap = document.getElementById("category-filter");
+  if (!wrap) return;
+  if (!state.config.has_categories) {
+    wrap.classList.add("hidden");
+    return;
+  }
+  wrap.classList.remove("hidden");
+  wrap.innerHTML = "";
+  const counts = {};
+  for (const r of state.rows) {
+    const c = rowCategory(r);
+    counts[c] = (counts[c] || 0) + 1;
+  }
+  const present = state.config.categories_present || [];
+
+  // "All" — active when nothing is hidden; click resets the filter.
+  const allActive = state.hiddenCategories.size === 0;
+  wrap.appendChild(
+    el(
+      "button",
+      {
+        type: "button",
+        class: "cat-chip cat-chip-all" + (allActive ? " active" : ""),
+        title: "Show every category",
+        onclick: () => {
+          state.hiddenCategories.clear();
+          state.page = 0;
+          renderCategoryChips();
+          renderTable();
+        },
+      },
+      `All (${state.rows.length.toLocaleString()})`,
+    ),
+  );
+
+  for (const key of present) {
+    const shown = !state.hiddenCategories.has(key);
+    wrap.appendChild(
+      el(
+        "button",
+        {
+          type: "button",
+          class: "cat-chip cat-" + key + (shown ? " active" : ""),
+          title: shown ? "Click to hide this category" : "Click to show this category",
+          onclick: () => {
+            if (state.hiddenCategories.has(key)) state.hiddenCategories.delete(key);
+            else state.hiddenCategories.add(key);
+            state.page = 0;
+            renderCategoryChips();
+            renderTable();
+          },
+        },
+        `${CATEGORY_LABELS[key] || key} (${(counts[key] || 0).toLocaleString()})`,
+      ),
+    );
+  }
+}
+
+// ---------- Render: tabs ----------
+
+function setTab(tab) {
+  state.tab = tab;
+  state.page = 0;
+  document.querySelectorAll(".tabs .tab").forEach((t) => {
+    t.classList.toggle("active", t.dataset.tab === tab);
+  });
+  renderTable();
+}
+
+function setupTabs() {
+  const hasCrm = !!state.config.has_crm;
+  const crmCount = state.rows.filter((r) => r.in_crm).length;
+  const whitespaceCount = state.rows.length - crmCount;
+  const goldCount = state.rows.filter(isGold).length;
+
+  const visible = {
+    // One unified accounts sheet: CRM + whitespace rows live together,
+    // separated by the Category column + filter chips (not by tabs). The legacy
+    // second "whitespace" tab is retired (kept in markup but always hidden).
+    accounts: true,
+    whitespace: false,
+    // Eval tab is ALWAYS shown: it carries gold-independent bucket
+    // diagnostics (employee-size mix + attribute mix) in addition to the
+    // gold-lift evaluation. The gold-lift table is skipped inside
+    // renderEval when no gold set is loaded, but the tab itself never hides.
+    eval: true,
+  };
+
+  document.querySelectorAll(".tabs .tab").forEach((t) => {
+    if (!visible[t.dataset.tab]) {
+      t.classList.add("hidden");
+    } else {
+      t.classList.remove("hidden");
+      t.addEventListener("click", () => setTab(t.dataset.tab));
+    }
+  });
+  if (!visible[state.tab]) {
+    state.tab = Object.keys(visible).find((k) => visible[k]) || "accounts";
+  }
+  setTab(state.tab);
+}
+
 // ---------- Reset / init ----------
 
 function resetDefaults() {
@@ -1025,7 +1332,9 @@ function resetDefaults() {
   const grouped = signalsByCategory();
   const cats = state.config.categories || {};
   const sections = state.config.sections || {};
-  const hasSecs = Object.keys(sections).length > 0;
+  // Match hasSections(): only treat as multi-section when ≥2 are present,
+  // otherwise state.sectionPct stays empty and categories sum to 100 globally.
+  const hasSecs = Object.keys(sections).length > 1;
 
   // Section weights from config.sections.X.default_pct; normalise to 100.
   if (hasSecs) {
@@ -1088,14 +1397,12 @@ function resetDefaults() {
   for (const m of state.config.multipliers || []) {
     state.multPct[m.column] = Number(m.default_pct ?? 0);
   }
-  // Seed tag multipliers from config.tag_multipliers_defaults — written at
-  // build time by Step 4(a) tag-lift calibration (customer rate vs candidate
-  // baseline rate). Each entry: {tag, pct, direction: "boost"|"penalty"}.
-  // Filter against availableTags so a default tag missing from the current
-  // universe doesn't surface a dead slider.
-  const knownDefaultTags = new Set((state.availableTags || []).map((t) => t.tag));
-  state.tagMult = (state.config.tag_multipliers_defaults || [])
-    .filter((e) => e && e.tag && knownDefaultTags.has(e.tag))
+  // Tag multipliers persist in config.tag_multipliers (mutated on Save).
+  // Filter against availableTags so a tag that has left the universe
+  // doesn't surface in the picker.
+  const knownTags = new Set((state.availableTags || []).map((t) => t.tag));
+  state.tagMult = (state.config.tag_multipliers || [])
+    .filter((e) => e && e.tag && knownTags.has(e.tag))
     .map((e) => ({
       tag: String(e.tag),
       pct: Number(e.pct) || 0,
@@ -1110,42 +1417,6 @@ function resetDefaults() {
 }
 
 // ---------- Save / restore weights ----------
-
-// Overlay weights loaded from account-whitespace-weights.json onto the slider
-// state built by resetDefaults(). Only keys that still exist in the current
-// config are applied, so a stale weights file degrades gracefully.
-function applySavedWeights(saved) {
-  if (!saved) return;
-  const secs = saved.sections || {};
-  for (const k of Object.keys(state.sectionPct)) {
-    if (k in secs) state.sectionPct[k] = Number(secs[k]);
-  }
-  const cats = saved.categories || {};
-  for (const k of Object.keys(state.catPct)) {
-    if (k in cats) state.catPct[k] = Number(cats[k]);
-  }
-  const sigs = saved.signals || {};
-  for (const cat of Object.keys(state.withinPct)) {
-    for (const sig of Object.keys(state.withinPct[cat])) {
-      if (sig in sigs) state.withinPct[cat][sig] = Number(sigs[sig]);
-    }
-  }
-  const mults = saved.multipliers || {};
-  for (const col of Object.keys(state.multPct)) {
-    if (col in mults) state.multPct[col] = Number(mults[col]);
-  }
-  // Tag multipliers may be absent on older saved files — leave state.tagMult
-  // empty in that case rather than clobbering. Filter against availableTags
-  // so a saved tag that no longer exists in the universe doesn't show up.
-  const known = new Set(state.availableTags.map((t) => t.tag));
-  state.tagMult = (saved.tag_multipliers || [])
-    .filter((e) => e && e.tag && known.has(e.tag))
-    .map((e) => ({
-      tag: String(e.tag),
-      pct: Number(e.pct) || 0,
-      direction: e.direction === "boost" ? "boost" : "penalty",
-    }));
-}
 
 // ---------- Download: data.csv with current scores -----------------------
 
@@ -1198,8 +1469,8 @@ function downloadCsv() {
 
   // Identity columns present on the row (matches score_sheet.py).
   const IDENT = [
-    "org_id", "name", "url", "employee_count_int", "headquarters_country",
-    "industry", "list_type", "crm_parent_name",
+    "org_id", "name", "url", "account_category", "employee_count_int",
+    "headquarters_country", "industry", "list_type", "crm_parent_name",
   ];
   const sample = rows[0];
   const ident = IDENT.filter((c) => c in sample);
@@ -1304,7 +1575,8 @@ async function saveWeights() {
       body: JSON.stringify(payload),
     });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    await resp.json();
+    const result = await resp.json();
+    state.config.saved_at = result.saved_at;
     if (status) status.textContent = "Saved";
   } catch (err) {
     if (status) status.textContent = "Save failed: " + err.message;
@@ -1325,8 +1597,8 @@ function scheduleAutoSave() {
 // now, so there is nothing to flush.
 async function flushAutoSave() {}
 
-// One score+rank per org (highest score wins on any duplicate id) — mirrors what
-// the table shows so the saved data.csv matches the view.
+// One score+rank per UNIQUE Sumble org (duplicate org_ids collapse, highest
+// score wins) — mirrors the app's dedup so the saved data.csv matches the view.
 function computeScoredRows() {
   const scored = state.rows
     .map((r) => ({ id: r[state.config.id_column], score: rowScore(r) }))
@@ -1342,8 +1614,8 @@ function computeScoredRows() {
   return out;
 }
 
-// Explicit Save: persist the weights (account-whitespace-weights.json) AND
-// data.csv (with score + rank columns) in one server write.
+// Explicit Save: persist the weights (account-scoring-weights.json) AND data.csv
+// (with score + rank columns) in one server write.
 async function saveAll() {
   const status = document.getElementById("save-status");
   const payload = buildWeightsPayload();
@@ -1368,11 +1640,12 @@ async function saveAll() {
 }
 
 function downloadConfig() {
-  // Build a stand-alone whitespace spec by overlaying the current slider
-  // values onto a deep clone of state.config. Mirrors the structure the
-  // server writes on /api/save-weights so the score_accounts.py companion
-  // can reproduce the score from this single file.
+  // Build a stand-alone scoring spec by overlaying the current slider
+  // values onto a deep clone of state.config. Mirrors what the server
+  // writes on /api/save-weights so a coding agent can re-implement the
+  // score from this single file.
   const spec = JSON.parse(JSON.stringify(state.config));
+  // Strip client-only fields that aren't part of the persisted spec.
   delete spec.available_tags;
   delete spec.has_crm;
 
@@ -1386,6 +1659,7 @@ function downloadConfig() {
       v.default_pct = Math.round(Number(state.catPct[k]) * 100) / 100;
     }
   }
+  // signal default_within lives in state.withinPct[catKey][sigKey].
   for (const within of Object.values(state.withinPct)) {
     for (const [sig, pct] of Object.entries(within)) {
       if (spec.signals && spec.signals[sig]) {
@@ -1407,11 +1681,11 @@ function downloadConfig() {
   }));
   spec.saved_at = new Date().toISOString().replace(/\.\d+Z$/, "+00:00");
 
-  const customer = (spec.customer_name || "whitespace")
+  const customer = (spec.customer_name || "scoring")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "_");
   const stamp = new Date().toISOString().slice(0, 10);
-  const fname = `${customer}_whitespace_config_${stamp}.json`;
+  const fname = `${customer}_scoring_config_${stamp}.json`;
 
   const blob = new Blob([JSON.stringify(spec, null, 2)], {
     type: "application/json;charset=utf-8",
@@ -1438,23 +1712,13 @@ async function init() {
   }
   state.config = data.config;
   state.rows = data.rows;
-  state.savedWeights = data.saved_weights || null;
   state.availableTags = data.config.available_tags || [];
 
-  // Tabs follow the list_type column: Subsidiaries appears only when the
-  // universe has rows whose parent is a CRM account.
-  const types = new Set(state.rows.map((r) => r.list_type || "whitespace"));
-  // Always include "eval" as a view-mode tab even with a single list_type
-  // (it's gold-independent — just composition diagnostics on candidates).
-  state.tabs = ["whitespace", "crm_subsidiary"].filter((t) => types.has(t));
-  state.tabs.push("eval");
-  state.tab = "whitespace";
-
   document.getElementById("customer-name").textContent =
-    state.config.customer_name || "Account whitespace";
+    state.config.customer_name || "Account scoring";
   document.title = state.config.customer_name
-    ? `${state.config.customer_name} · account whitespace`
-    : "Account whitespace";
+    ? `${state.config.customer_name} · account scoring`
+    : "Account scoring";
 
   if (state.config.branding) {
     const root = document.documentElement.style;
@@ -1480,18 +1744,11 @@ async function init() {
   }
 
   resetDefaults();
-  if (state.savedWeights) {
-    applySavedWeights(state.savedWeights);
-    renderCategories();
-    renderMultipliers();
-    renderTagMultipliers();
-    const status = document.getElementById("save-status");
-    if (status && state.savedWeights.saved_at) {
-      status.textContent = `Loaded saved weights (${state.savedWeights.saved_at})`;
-    }
-  }
-  renderTabs();
-  renderTable();
+  state.dirty = false;
+  const status = document.getElementById("save-status");
+  if (status) status.textContent = state.config.saved_at ? "Saved" : "";
+  setupTabs();
+  renderCategoryChips();
 
   // Wire up the tag-multiplier picker. The combobox is a native datalist
   // input; on Add we look the typed value up against availableTags
@@ -1517,9 +1774,7 @@ async function init() {
         if (prefixMatches.length === 1) resolved = prefixMatches[0].tag;
       }
       if (!resolved) return;
-      // Default to a mild amplify; the signed slider lets the user drag down
-      // into the penalize range if they'd rather suppress the attribute.
-      state.tagMult.push({ tag: resolved, pct: 25, direction: "boost" });
+      state.tagMult.push({ tag: resolved, pct: 25, direction: "penalty" });
       tagInput.value = "";
       renderTagMultipliers();
       renderTable();
@@ -1539,7 +1794,6 @@ async function init() {
     resetDefaults();
     scheduleAutoSave();
   });
-  state.dirty = false;
   const saveBtn = document.getElementById("save-btn");
   if (saveBtn) saveBtn.addEventListener("click", saveAll);
   // Manual-save: warn before leaving with unsaved slider changes.
@@ -1553,15 +1807,13 @@ async function init() {
   if (downloadBtn) downloadBtn.addEventListener("click", downloadCsv);
   const downloadCfgBtn = document.getElementById("download-config");
   if (downloadCfgBtn) {
-    downloadCfgBtn.addEventListener("click", () => downloadConfig());
+    downloadCfgBtn.addEventListener("click", async () => {
+      // Make sure any pending debounced save has flushed first so the
+      // exported file on disk matches what we just downloaded.
+      await flushAutoSave();
+      downloadConfig();
+    });
   }
-  // Cmd/Ctrl+S triggers the explicit Save (weights + data.csv with scores).
-  document.addEventListener("keydown", (e) => {
-    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
-      e.preventDefault();
-      saveAll();
-    }
-  });
 
   const searchInput = document.getElementById("search-input");
   if (searchInput) {
@@ -1584,6 +1836,49 @@ async function init() {
       searchInput.select();
     });
   }
+
+  // Employee-size filter (min/max range, hides rows; scores stay
+  // normalized across the full universe). Hidden if the data lacks
+  // an employee_count_int column.
+  const sizeFilter = document.getElementById("size-filter");
+  const sizeMin = document.getElementById("size-min");
+  const sizeMax = document.getElementById("size-max");
+  const sizeClear = document.getElementById("size-clear");
+  const hasSizeCol = state.rows.some((r) => r[SIZE_FILTER_COL] != null);
+  if (sizeFilter && !hasSizeCol) sizeFilter.classList.add("hidden");
+  const applySize = () => {
+    state.page = 0;
+    renderTable();
+  };
+  if (sizeMin) {
+    sizeMin.addEventListener("input", (e) => {
+      const v = e.target.value.trim();
+      state.sizeMin = v === "" ? null : Number(v);
+      if (state.sizeMin != null && !Number.isFinite(state.sizeMin)) {
+        state.sizeMin = null;
+      }
+      applySize();
+    });
+  }
+  if (sizeMax) {
+    sizeMax.addEventListener("input", (e) => {
+      const v = e.target.value.trim();
+      state.sizeMax = v === "" ? null : Number(v);
+      if (state.sizeMax != null && !Number.isFinite(state.sizeMax)) {
+        state.sizeMax = null;
+      }
+      applySize();
+    });
+  }
+  if (sizeClear) {
+    sizeClear.addEventListener("click", () => {
+      state.sizeMin = null;
+      state.sizeMax = null;
+      if (sizeMin) sizeMin.value = "";
+      if (sizeMax) sizeMax.value = "";
+      applySize();
+    });
+  }
   document.getElementById("page-prev").addEventListener("click", () => {
     if (state.page > 0) {
       state.page--;
@@ -1595,6 +1890,16 @@ async function init() {
     renderTable();
   });
 
+  const bucketSlider = document.getElementById("eval-buckets-slider");
+  const bucketValue = document.getElementById("eval-buckets-value");
+  if (bucketSlider && bucketValue) {
+    bucketSlider.addEventListener("input", (e) => {
+      const n = Number(e.target.value);
+      state.evalBuckets = n;
+      bucketValue.textContent = String(n);
+      if (state.tab === "eval") renderEval();
+    });
+  }
   document.getElementById("breakdown-close").addEventListener("click", () => {
     document.getElementById("breakdown-panel").classList.add("hidden");
     state.selectedId = null;
@@ -1602,18 +1907,6 @@ async function init() {
       tr.classList.remove("selected"),
     );
   });
-
-  // Eval-tab bucket slider — live-recomputes the composition tables.
-  const bucketSlider = document.getElementById("eval-buckets-slider");
-  const bucketValue = document.getElementById("eval-buckets-value");
-  if (bucketSlider && bucketValue) {
-    bucketSlider.addEventListener("input", (e) => {
-      const n = Math.max(2, Math.min(100, Number(e.target.value) || 10));
-      state.evalBuckets = n;
-      bucketValue.textContent = String(n);
-      if (state.tab === "eval") renderEval();
-    });
-  }
 }
 
 init();

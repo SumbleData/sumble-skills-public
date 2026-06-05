@@ -69,6 +69,8 @@
         </nav>
         <p id="tab-description" class="tab-description"></p>
 
+        <div id="category-filter" class="category-filter hidden"></div>
+
         <div id="search-wrap" class="search-wrap">
           <input id="search-input" type="search"
                  placeholder="Search visible columns… (press / to focus)"
@@ -91,6 +93,16 @@
           </table>
           <div id="eval-view" class="hidden">
             <div id="eval-summary" class="eval-summary"></div>
+
+            <div id="eval-category-section" class="hidden">
+              <h3 class="eval-diag-title">Rank distribution by account category</h3>
+              <p class="eval-diag-sub">Where each category lands in the global ranking (all accounts scored together). Lower mean/median rank and higher mean %ile = ranked closer to the top. Customers should cluster near the top; whitespace shows your best net-new targets.</p>
+              <table id="eval-category-table" class="eval-diag-table">
+                <thead></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+
             <div class="eval-controls">
               <label for="eval-buckets-slider">
                 Buckets: <span id="eval-buckets-value">10</span>

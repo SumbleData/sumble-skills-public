@@ -1,17 +1,20 @@
 """Build the scored sheet from data.csv + the weights config (stdlib only).
 
 Reads data.csv (the immutable RAW API-pull file — never modified here) and the
-weights config, and writes ONE file:
-  - score.csv : the human-facing scored sheet, sorted by rank. Columns:
-                `rank` (far left) → identity → `score` → one CONTRIBUTION column
-                per signal (points = norm * effective_weight * multiplier * 100,
-                so the contributions SUM EXACTLY to `score`) → deep links on the
-                far right (`sumble_url` org page + one per signal). Signals whose
-                TOTAL contribution across all rows is 0 (e.g. a category/within
-                weight of 0) are dropped.
+weights config, and writes ONE complete file:
+  - score.csv : the single human-facing sheet, sorted by rank. It is a SUPERSET
+                of data.csv: `rank` (far left) → EVERY data.csv column (raw
+                signals + identity) → `score` → one CONTRIBUTION column per
+                signal (points = norm * effective_weight * multiplier * 100, so
+                the contributions SUM EXACTLY to `score`) → deep links on the far
+                right (`sumble_url` org page + one per signal). Signals whose
+                TOTAL contribution across all rows is 0 are dropped (from the
+                contribution columns only; their raw column is still present).
 
-data.csv is the source of truth for raw counts and is left untouched; all
-scoring/ranking lives in score.csv, regenerated on every Save and at startup.
+So you only ever need score.csv — it has the data, the score, the per-signal
+contributions, and the deep links in one place. data.csv is the immutable raw
+archive the app re-scores from; it is never rewritten. score.csv is regenerated
+on every Save and at startup.
 
 The score mirrors the app's client math exactly: p99 exponential-saturation
 normalisation, effective weight = section% * category% * within% (renormalised
@@ -31,8 +34,8 @@ from typing import Any
 from urllib.parse import quote_plus, urlencode
 
 IDENTITY_PREFERRED = [
-    "org_id", "name", "url", "employee_count_int", "headquarters_country",
-    "industry", "list_type", "crm_parent_name",
+    "org_id", "name", "url", "account_category", "employee_count_int",
+    "headquarters_country", "industry", "list_type", "crm_parent_name",
 ]
 
 
@@ -203,14 +206,22 @@ def build_score_sheet(app_dir: Path, weights_path: Path | None = None) -> dict[s
         used.add(lab)
         labels[k] = lab
 
-    ident = [c for c in IDENTITY_PREFERRED if c in raw_fields]
+    # score.csv is the ONE complete post-Save file: it carries EVERY data.csv
+    # column (raw signals + identity), nice identity columns first, then the rest
+    # in their data.csv order — followed by score, rank, contributions, links. So
+    # the user never needs to join score.csv back to data.csv; data.csv is just
+    # the immutable raw archive the app re-scores from.
+    ident = [c for c in IDENTITY_PREFERRED if c in raw_fields] + [
+        c for c in raw_fields if c not in IDENTITY_PREFERRED
+    ]
     base_url = config.get("sumble_url_base", "https://sumble.com/orgs/")
     slug_col = config.get("slug_column", "slug")
     # Per-signal deep links for the live signals that carry a sumble_link.
     link_keys = [k for k in live if signals[k].get("sumble_link")]
 
-    # Layout: rank (far left) → identity → score → contribution cols → deep links
-    # (org page + one per signal) on the far right. Contributions sum to score.
+    # Layout: rank (far left) → all data columns → score → contribution cols →
+    # deep links (org page + one per signal) on the far right. Contributions sum
+    # to score.
     score_fields = (
         ["rank"] + ident + ["score"]
         + [labels[k] for k in live]

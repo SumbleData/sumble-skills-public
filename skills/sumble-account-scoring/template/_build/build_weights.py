@@ -1,13 +1,12 @@
-"""Stage 3 — emit account-whitespace-weights.json from spec.json + calibration.
+"""Stage 3 — emit account-scoring-weights.json from spec.json + calibration.
 
 Reads:
 - ../_raw/spec.json
 - ../_raw/_calibration_audit.json   (from merge_data.py — Step 4(a) tag-lift)
-- ../data.csv                       (candidate rows, for p99)
-- ../_raw/_customer_calibration.csv (folded into p99 so customers contribute)
+- ../data.csv                       (for p99 computation)
 
 Writes:
-- ../account-whitespace-weights.json
+- ../account-scoring-weights.json
 
 Every Sumble-sourced signal's `source` block points at the unified endpoint
 `POST https://api.sumble.com/v6/organizations` and carries the exact `select`
@@ -16,11 +15,20 @@ or the shipped score_accounts.py — can reproduce each column from the source
 block alone. The entity selections are produced by sumble_v6.entity_plan(), the
 same function fetch_data.py used to pull the data, so they cannot drift.
 
-POLICY CONSTANTS (intentionally fixed):
+POLICY CONSTANTS (intentionally fixed defaults; the user can override the
+segment taxonomy in the interview via spec["section_plan"]):
 - PERSONA_DECAY = 0.98, TECH_KEY_DECAY = 0.98, TECH_OTHER_DROP = 0.6
-- SECTION_BLEND = {"acv": 75, "intent": 25} (fixed; Intent categories present
-  whenever the spec has projects).
-- CATEGORY_WEIGHTS_ACV / CATEGORY_WEIGHTS_INTENT below.
+- DEFAULT_SECTIONS — three orthogonal segments: Size, Concentration, and
+  Growth & momentum (blend 50/30/20). The old ACV/Intent blend is gone.
+- DEFAULT_CATEGORY_SECTION / CATEGORY_META below — which segment each category
+  lands in by default, and its label + within-segment weight.
+
+Segments are user-customizable. spec["section_plan"] can rename / reweight /
+reassign segments (e.g. a per-business-unit breakdown like Oracle OCI vs Apps),
+and the existing spec["first_party_categories"] / spec["first_party_signals"]
+hooks weave 1P (or repeated Sumble) signals into any segment. A signal may
+appear in MORE THAN ONE segment — app.py scores each signal from its `column`,
+so a duplicate key with the same `column` simply repeats the element.
 """
 
 from __future__ import annotations
@@ -40,17 +48,60 @@ TECH_OTHER_DROP = 0.6
 
 ENDPOINT = "POST https://api.sumble.com/v6/organizations"
 
-SECTION_BLEND = {"acv": 75, "intent": 25}
-CATEGORY_WEIGHTS_ACV = {
-    "icp_persona_count": 39.0,
-    "icp_persona_growth": 16.25,
-    "icp_persona_concentration": 9.75,
-    "relevant_tech_team_count": 24.5,
-    "relevant_tech_team_concentration": 10.5,
+# Default three-segment taxonomy. The score blends three orthogonal segments;
+# the user can rename / reweight / reassign them (or define entirely custom
+# segments, e.g. per business unit) in the interview via spec["section_plan"].
+DEFAULT_SECTIONS = [
+    {"key": "size", "label": "Size (how big is the opportunity)", "default_pct": 50},
+    {
+        "key": "growth_momentum",
+        "label": "Growth & momentum (is now the time)",
+        "default_pct": 30,
+    },
+    {
+        "key": "concentration",
+        "label": "Concentration (how strong / focused the fit)",
+        "default_pct": 20,
+    },
+]
+# category_key -> default segment key.
+DEFAULT_CATEGORY_SECTION = {
+    "icp_persona_count": "size",
+    "relevant_tech_team_count": "size",
+    "intent_project_tech_count": "size",
+    "intent_project_persona_count": "size",
+    "funding": "size",
+    "icp_persona_concentration": "concentration",
+    "relevant_tech_team_concentration": "concentration",
+    "icp_persona_growth": "growth_momentum",
+    "funding_momentum": "growth_momentum",
 }
-CATEGORY_WEIGHTS_INTENT = {
-    "intent_project_tech_count": 60.0,
-    "intent_project_persona_count": 40.0,
+# category_key -> {label, default_pct}. default_pct is the WITHIN-segment weight
+# before per-segment renormalisation (categories absent for this spec drop out
+# and the rest renormalise to 100). Funding categories appear only when
+# spec["include_funding"]; intent_project_* only when the spec has projects.
+CATEGORY_META = {
+    "icp_persona_count": {"label": "Persona headcount", "default_pct": 45.0},
+    "relevant_tech_team_count": {"label": "Tech teams", "default_pct": 30.0},
+    "intent_project_tech_count": {
+        "label": "Project × tech jobs (recent)",
+        "default_pct": 15.0,
+    },
+    "intent_project_persona_count": {
+        "label": "Project × persona jobs (recent)",
+        "default_pct": 10.0,
+    },
+    "funding": {"label": "Funding (total raised)", "default_pct": 12.0},
+    "icp_persona_concentration": {
+        "label": "Persona concentration",
+        "default_pct": 60.0,
+    },
+    "relevant_tech_team_concentration": {
+        "label": "Tech team concentration",
+        "default_pct": 40.0,
+    },
+    "icp_persona_growth": {"label": "Persona growth (YoY)", "default_pct": 100.0},
+    "funding_momentum": {"label": "Funding momentum", "default_pct": 30.0},
 }
 
 
@@ -82,6 +133,8 @@ def compute_p99(values: list[float], transform: str) -> float:
     if transform == "log":
         xs = [math.log1p(max(v, 0.0)) for v in values if v > 0]
     else:
+        # "linear" and "recency" both percentile over raw positive values;
+        # the recency normaliser applies its own log1p decay at score time.
         xs = [v for v in values if v > 0]
     if not xs:
         return 1.0
@@ -126,7 +179,7 @@ def _entity_input(name: str, etype: str, term: str, metric: str) -> dict:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Build account-whitespace-weights.json.")
+    parser = argparse.ArgumentParser(description="Build account-scoring-weights.json.")
     parser.add_argument("--raw", default="../_raw")
     args = parser.parse_args()
     raw = Path(args.raw).resolve()
@@ -138,8 +191,6 @@ def main() -> None:
         if audit_path.exists()
         else {"attrs": {}, "multipliers_defaults": []}
     )
-
-    sections_pct = SECTION_BLEND
 
     personas = spec["personas"]
     techs = spec["techs"]
@@ -155,32 +206,69 @@ def main() -> None:
     tech_decay = tier_split_weights(len(techs_key), len(techs_other))
     project_decay = [round(100 / len(projects), 2) for _ in projects] if projects else []
 
-    sections: dict[str, dict] = {
-        "acv": {"label": "ACV (size + fit)", "default_pct": sections_pct.get("acv", 75)},
-        "intent": {
-            "label": "Intent (buying window)",
-            "default_pct": sections_pct.get("intent", 25),
-        },
-    }
-    categories: dict[str, dict] = {}
-    for k, pct in CATEGORY_WEIGHTS_ACV.items():
-        label = k.replace("_", " ").replace("icp", "ICP").title()
-        categories[k] = {"label": label, "section": "acv", "default_pct": pct}
-    if projects:
-        for k, pct in CATEGORY_WEIGHTS_INTENT.items():
-            label = k.replace("_", " ").title()
-            categories[k] = {"label": label, "section": "intent", "default_pct": pct}
+    intent_active = bool(projects)
+    funding_active = bool(spec.get("include_funding"))
 
-    # Optional 1P categories from spec (e.g. product_usage in the intent section).
+    # --- Segment taxonomy (default three segments, user-overridable) ---
+    plan = spec.get("section_plan") or {}
+    sections_list = plan.get("sections") or DEFAULT_SECTIONS
+    section_assign = dict(DEFAULT_CATEGORY_SECTION)
+    section_assign.update(plan.get("category_section") or {})
+    cat_overrides = plan.get("category_meta") or {}
+
+    sections: dict[str, dict] = {}
+    for s in sections_list:
+        sections[s["key"]] = {
+            "label": s.get("label", s["key"].replace("_", " ").title()),
+            "default_pct": float(s.get("default_pct", 0)),
+        }
+    default_section = sections_list[0]["key"]
+
+    def _cat_active(ck: str) -> bool:
+        if ck in ("intent_project_tech_count", "intent_project_persona_count"):
+            return intent_active
+        if ck in ("funding", "funding_momentum"):
+            return funding_active
+        return True  # persona + tech categories are always present
+
+    categories: dict[str, dict] = {}
+    for ck, meta in CATEGORY_META.items():
+        if not _cat_active(ck):
+            continue
+        sec = section_assign.get(ck, default_section)
+        if sec not in sections:  # a custom plan dropped this segment → fall back
+            sec = default_section
+        ov = cat_overrides.get(ck, {})
+        categories[ck] = {
+            "label": ov.get("label", meta["label"]),
+            "section": sec,
+            "default_pct": float(ov.get("default_pct", meta["default_pct"])),
+        }
+
+    # Optional 1P (or repeated-Sumble) categories from spec — placed in any
+    # segment (default: the first). Lets the user weave first-party signals or
+    # business-unit breakdowns into the taxonomy.
     for cat in spec.get("first_party_categories", []) or []:
+        sec = cat.get("section", default_section)
+        if sec not in sections:
+            sec = default_section
         categories[cat["key"]] = {
             "label": cat.get("label", cat["key"].replace("_", " ").title()),
-            "section": cat.get("section", "intent"),
+            "section": sec,
             "default_pct": float(cat.get("default_pct", 0)),
         }
 
-    # Re-normalise each section's category weights to sum to 100 (keeps the
-    # invariant when 1P categories are appended to the intent section).
+    # Drop any segment that ended up with no categories, then renormalise the
+    # surviving segments' blend to 100.
+    live_sections = {cv["section"] for cv in categories.values()}
+    sections = {k: v for k, v in sections.items() if k in live_sections}
+    sec_total = sum(v["default_pct"] for v in sections.values())
+    if sec_total > 0:
+        for v in sections.values():
+            v["default_pct"] = round(v["default_pct"] * 100 / sec_total, 4)
+
+    # Re-normalise each segment's category weights to sum to 100 (keeps the
+    # invariant when categories are added/removed per spec).
     by_section: dict[str, list[str]] = {}
     for ck, cv in categories.items():
         by_section.setdefault(cv["section"], []).append(ck)
@@ -295,9 +383,15 @@ def main() -> None:
             },
         )
 
-    # Tech signals × 2 categories
+    # Tech signals × 2 categories. A tech can be an individual technology or a
+    # predefined Sumble technology CATEGORY (kind=="category") — the entity type +
+    # deep-link field differ, but the column/score shape is identical.
     for idx, t in enumerate(techs_all):
         slug, label = t["slug"], t["label"]
+        is_cat = t.get("kind") == "category"
+        etype = "technology_category" if is_cat else "technology"
+        link_field = "technology_category" if is_cat else "technology"
+        kind_word = "category" if is_cat else "tool"
         add_signal(
             key=f"relevant_tech_team_count_{slug}",
             column=f"{slug}_teams",
@@ -307,11 +401,11 @@ def main() -> None:
             within=tech_decay[idx],
             api_supported=True,
             source={
-                "why": f"Teams using {label} prove active, in-production adoption.",
+                "why": f"Teams using the {label} {kind_word} prove active, in-production adoption.",
                 "kind": "sumble_api",
-                "api": _api_block("technology", slug, "team_count"),
+                "api": _api_block(etype, slug, "team_count"),
             },
-            sumble_link={"path": "/teams", "filters": {"technology": [slug]}},
+            sumble_link={"path": "/teams", "filters": {link_field: [slug]}},
         )
         add_signal(
             key=f"relevant_tech_team_concentration_{slug}",
@@ -327,7 +421,7 @@ def main() -> None:
                 "derivation": {
                     "formula": f"100 * {slug}_teams / teams_count",
                     "inputs": [
-                        _entity_input(f"{slug}_teams", "technology", slug, "team_count"),
+                        _entity_input(f"{slug}_teams", etype, slug, "team_count"),
                         _attr_input(
                             "teams_count",
                             "teams_count",
@@ -338,11 +432,105 @@ def main() -> None:
             },
         )
 
+    # Funding signals (only when requested). Modelled as single-input attribute
+    # derivations so score_accounts.py reproduces them straight from the API
+    # `funding_*` attributes (no entity call). Both log-transformed (USD scale).
+    if funding_active:
+        # total raised → "Funding (total raised)" (Size by default); recency +
+        # last-round → "Funding momentum" (Growth & momentum by default). The
+        # growth_momentum segment always exists (persona growth), so funding
+        # momentum no longer depends on whether the spec has projects.
+        momentum_cat = "funding_momentum"
+        total_within = 100.0
+        momentum_within = 50.0
+        add_signal(
+            key="funding_total_raised",
+            column="funding_total_raised",
+            label="Total funding raised",
+            category="funding",
+            transform="log",
+            within=total_within,
+            api_supported=True,
+            source={
+                "why": (
+                    "More capital raised = a bigger budget and a faster hiring "
+                    "ramp — more interviews to run."
+                ),
+                "kind": "sumble_derived",
+                "derivation": {
+                    "formula": "funding_total_raised",
+                    "inputs": [
+                        _attr_input(
+                            "funding_total_raised",
+                            "funding_total_raised",
+                            "total funding raised across all rounds, whole USD",
+                        ),
+                    ],
+                },
+            },
+        )
+        add_signal(
+            key="funding_days_since_last_round",
+            column="funding_days_since_last_round",
+            label="Days since last financing",
+            category=momentum_cat,
+            transform="recency",
+            within=momentum_within,
+            api_supported=True,
+            source={
+                "why": (
+                    "A recent financing round means fresh capital and an imminent "
+                    "hiring ramp — an open buying window. Score decays as the last "
+                    "round ages; never-financed scores 0."
+                ),
+                "kind": "sumble_derived",
+                "derivation": {
+                    "formula": (
+                        "days between funding_last_round_date and today, "
+                        "recency-scored (fewer days = higher; none = 0)"
+                    ),
+                    "inputs": [
+                        _attr_input(
+                            "funding_last_round_date",
+                            "funding_last_round_date",
+                            "date of the latest funding round (ISO YYYY-MM-DD)",
+                        ),
+                    ],
+                },
+            },
+        )
+        add_signal(
+            key="funding_last_round_raised",
+            column="funding_last_round_raised",
+            label="Latest round size",
+            category=momentum_cat,
+            transform="log",
+            within=momentum_within,
+            api_supported=True,
+            source={
+                "why": (
+                    "A large most-recent round means fresh capital — an active "
+                    "hiring/buying window."
+                ),
+                "kind": "sumble_derived",
+                "derivation": {
+                    "formula": "funding_last_round_raised",
+                    "inputs": [
+                        _attr_input(
+                            "funding_last_round_raised",
+                            "funding_last_round_raised",
+                            "amount raised in the latest funding round, whole USD",
+                        ),
+                    ],
+                },
+            },
+        )
+
     # Intent signals (when the spec has projects) — 3-month windowed via `since`
     if projects:
         for idx, proj in enumerate(projects):
             pslug, plabel = proj["slug"], proj["label"]
-            tech_term = sumble_v6.intent_tech_query(pslug, tech_slugs)
+            tech_term = sumble_v6.intent_tech_query(pslug, techs)
             persona_term = sumble_v6.intent_persona_query(pslug, persona_names)
             add_signal(
                 key=f"intent_project_tech_count_{pslug}",
@@ -397,30 +585,40 @@ def main() -> None:
                 },
             )
 
-    # Optional 1P signals from spec — appended verbatim, first_party
+    # Optional 1P (or repeated-Sumble) signals from spec. By default each is a
+    # first-party signal (api_supported:false). To REPEAT a Sumble column in a
+    # second segment, point `column` at the existing data.csv column and set
+    # `api_supported:true` with a `source` block — its p99 is recomputed from
+    # data.csv like any Sumble signal.
     for sig in spec.get("first_party_signals", []) or []:
         key = sig["key"]
-        signals[key] = {
+        api_supported = bool(sig.get("api_supported", False))
+        entry: dict = {
             "label": sig.get("label", key.replace("_", " ").title()),
             "column": sig.get("column", key),
             "category": sig.get("category", "third_party_intent"),
             "transform": sig.get("transform", "log"),
             "default_within": float(sig.get("default_within", 0)),
             "p99": float(sig.get("p99", 1.0)),
-            "api_supported": False,
-            "api_unsupported_reason": "First-party signal — not in Sumble's public API.",
-            "source": sig.get("source", {"kind": "first_party"}),
+            "api_supported": api_supported,
+            "source": sig.get(
+                "source", {"kind": "sumble_api" if api_supported else "first_party"}
+            ),
         }
+        if not api_supported:
+            entry["api_unsupported_reason"] = sig.get(
+                "api_unsupported_reason",
+                "First-party signal — not in Sumble's public API.",
+            )
+        if sig.get("sumble_link"):
+            entry["sumble_link"] = sig["sumble_link"]
+        signals[key] = entry
 
-    # p99 computation from data.csv + customer calibration rows
+    # p99 computation from data.csv
     universe_rows: list[dict] = []
     data_csv = output_root / "data.csv"
     if data_csv.exists():
         with data_csv.open() as fh:
-            universe_rows.extend(csv.DictReader(fh))
-    calib_csv = raw / "_customer_calibration.csv"
-    if calib_csv.exists():
-        with calib_csv.open() as fh:
             universe_rows.extend(csv.DictReader(fh))
     for sig in signals.values():
         if (
@@ -437,11 +635,18 @@ def main() -> None:
                 vals.append(0.0)
         sig["p99"] = compute_p99(vals, sig["transform"])
 
+    # Table identity columns shown in the app: Sumble name + url + headcount only.
+    # CRM identity (crm_account_id / crm_account_name / crm_url) stays in data.csv
+    # for the full export but is NOT shown — duplicated CRM records would
+    # otherwise surface the same Sumble org multiple times; the app dedups to
+    # unique org_id. hq country is intentionally omitted.
+    table_columns = ["name", "url", "employee_count_int"]
+
     company = spec.get("company", {})
     config: dict = {
         "schema_version": 1,
         "_comment": (
-            "Whitespace ranker config — generated deterministically from "
+            "Account-scoring config — generated deterministically from "
             "_raw/spec.json by template/_build/build_weights.py. Every Sumble "
             "signal's source.api points at POST /v6/organizations with the exact "
             "select slice; score_accounts.py reproduces each column from it. "
@@ -467,29 +672,31 @@ def main() -> None:
             ),
         },
         "saved_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "customer_name": f"{company.get('name', 'Unknown')} — Whitespace",
-        "score_label": "Whitespace Fit",
+        "customer_name": f"{company.get('name', 'Unknown')} — Scoring",
+        "score_label": "Account Score",
         "id_column": "org_id",
         "name_column": "name",
         "slug_column": "slug",
         "sumble_url_base": "https://sumble.com/orgs/",
         "data_csv": "data.csv",
-        "table_columns": [
-            "name",
-            "url",
-            "employee_count_int",
-            "headquarters_country",
-        ],
+        "table_columns": table_columns,
         "data_sources": spec.get("data_sources", {}),
         "sections": sections,
         "categories": categories,
         "signals": signals,
         "multipliers": [],
-        "tag_multipliers": [],
+        # Apply the gold-lift calibration BY DEFAULT (attribute + industry
+        # boosts/penalties) — the app opens with them active and the user can
+        # tune or remove any in the per-tag widget. tag_multipliers_defaults keeps
+        # the same list so Reset restores the calibrated starting point.
+        "tag_multipliers": audit.get("multipliers_defaults", []),
         "tag_multipliers_defaults": audit.get("multipliers_defaults", []),
-        "_tag_calibration_audit": audit.get("attrs", {}),
+        "_tag_calibration_audit": {
+            "attrs": audit.get("attrs", {}),
+            "industries": audit.get("industries", {}),
+        },
     }
-    out_path = output_root / "account-whitespace-weights.json"
+    out_path = output_root / "account-scoring-weights.json"
     out_path.write_text(json.dumps(config, indent=2))
     print(
         f"Wrote {out_path}: {len(sections)} sections, {len(categories)} "

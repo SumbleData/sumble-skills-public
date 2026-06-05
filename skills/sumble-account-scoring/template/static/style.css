@@ -151,26 +151,6 @@ button {
   text-decoration: underline;
 }
 
-.btn-save {
-  background: var(--accent);
-  color: #fff;
-  border: 0;
-  font-size: 12px;
-  font-weight: 600;
-  padding: 5px 12px;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.btn-save:hover:not(:disabled) {
-  filter: brightness(1.08);
-}
-
-.btn-save:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
-
 .btn-stack {
   display: flex;
   flex-direction: column;
@@ -209,11 +189,30 @@ button {
   border-color: var(--fg-muted);
 }
 
+.btn-save {
+  background: var(--accent);
+  color: #fff;
+  border: 1px solid var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 14px;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-save:hover {
+  background: var(--accent-strong, #00A63E);
+  border-color: var(--accent-strong, #00A63E);
+}
+
 .save-status {
-  margin: -8px 0 14px 0;
   font-size: 11px;
   color: var(--fg-dim);
-  min-height: 13px;
+  font-style: italic;
+  margin-right: 4px;
+  min-width: 48px;
+  text-align: right;
 }
 
 .btn-icon {
@@ -260,11 +259,28 @@ button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: transform 0.15s ease;
   color: var(--fg-muted);
 }
 
-.category.expanded .disclosure {
+/* Font-independent right-pointing triangle drawn with CSS borders.
+   Rotated 90° clockwise when its container has `.expanded` so it points
+   downward. Avoids the macOS/emoji-fallback issue where the Unicode
+   ▶ glyph rendered as a downward play-button. */
+.disclosure::before {
+  content: "";
+  display: block;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 4px 0 4px 6px;
+  border-color: transparent transparent transparent currentColor;
+  transition: transform 0.15s ease;
+}
+
+/* Scope rotation to the disclosure inside the category's OWN header. A
+   bare descendant selector would also catch any nested .disclosure (e.g.
+   if a category ever contains its own collapsibles) and rotate them too. */
+.category.expanded > .category-header .disclosure::before {
   transform: rotate(90deg);
 }
 
@@ -393,11 +409,14 @@ button {
   background: var(--bg);
 }
 
-.section-group > .section-header .disclosure {
+.section-group .disclosure {
   align-self: center;
 }
 
-.section-group.expanded > .section-header .disclosure {
+/* Direct-child scope — the previous descendant selector also matched
+   .disclosure spans of nested .category headers, rotating every category
+   arrow inside an expanded section. */
+.section-group.expanded > .section-header .disclosure::before {
   transform: rotate(90deg);
 }
 
@@ -549,6 +568,75 @@ button {
   margin-top: 4px;
 }
 
+/* ---- Account-category filter chips + in-row pills ---- */
+.category-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 8px 0;
+}
+.category-filter.hidden {
+  display: none;
+}
+.cat-chip {
+  border: 1px solid var(--border, #d7dee8);
+  background: #fff;
+  color: var(--fg);
+  padding: 3px 11px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+.cat-chip:hover {
+  border-color: var(--accent);
+}
+/* Multi-select: active = included (accent fill), inactive = excluded (muted). */
+.cat-chip.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.cat-chip:not(.active) {
+  color: var(--muted, #94a3b8);
+  border-color: #e2e8f0;
+  opacity: 0.7;
+}
+/* In-table category pill (color-coded, read-only). */
+.cat-pill {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.cat-pill.cat-customer {
+  background: var(--accent-soft, #dcfce7);
+  color: var(--accent-strong, #00a63e);
+}
+.cat-pill.cat-allocated {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+.cat-pill.cat-unallocated {
+  background: #fef3c7;
+  color: #b45309;
+}
+.cat-pill.cat-whitespace {
+  background: #ede9fe;
+  color: #6d28d9;
+}
+.cat-pill.cat-whitespace_subsidiary {
+  background: #cffafe;
+  color: #0e7490;
+}
+.cat-pill.cat-none {
+  background: var(--bg-soft, #eef2f7);
+  color: var(--muted, #64748b);
+}
+
 /* Signed amplify/penalize slider: red (penalize) → neutral → green (amplify),
    with a tick at the zero midpoint. */
 .tag-mult-slider {
@@ -622,33 +710,6 @@ button {
   margin: 8px 0 12px 0;
   font-size: 12px;
   color: var(--fg-dim);
-}
-
-.list-tabs {
-  display: flex;
-  gap: 4px;
-  margin-bottom: 8px;
-  border-bottom: 1px solid var(--border);
-}
-.list-tabs.hidden {
-  display: none;
-}
-.list-tab {
-  padding: 6px 14px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--fg-dim);
-  background: none;
-  border: none;
-  border-bottom: 2px solid transparent;
-  cursor: pointer;
-}
-.list-tab:hover {
-  color: var(--fg);
-}
-.list-tab.active {
-  color: var(--accent);
-  border-bottom-color: var(--accent);
 }
 
 .table-wrap {
@@ -751,13 +812,17 @@ tbody tr:last-child td {
   display: none;
 }
 
-/* --- search + pagination --- */
+/* --- search + filter + pagination --- */
 .search-wrap {
   padding: 4px 0 10px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
 }
 #search-input {
-  width: 100%;
-  max-width: 360px;
+  flex: 0 1 360px;
+  min-width: 200px;
   padding: 7px 10px;
   font: inherit;
   border: 1px solid #ddd;
@@ -768,6 +833,48 @@ tbody tr:last-child td {
   outline: none;
   border-color: var(--accent, #16A34A);
   box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.18);
+}
+.size-filter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--fg-dim, #64748B);
+}
+.size-filter.hidden {
+  display: none;
+}
+.size-filter-label {
+  font-weight: 500;
+  color: var(--fg, #0F172B);
+  white-space: nowrap;
+}
+.size-filter-input {
+  width: 84px;
+  padding: 6px 8px;
+  font: inherit;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: #fff;
+}
+.size-filter-input:focus {
+  outline: none;
+  border-color: var(--accent, #16A34A);
+  box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.18);
+}
+.size-filter-input::-webkit-outer-spin-button,
+.size-filter-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.size-filter-input[type="number"] {
+  -moz-appearance: textfield;
+}
+.size-filter-dash {
+  color: var(--fg-muted, #94A3B8);
+}
+.size-filter-clear {
+  font-size: 12px;
 }
 .pagination {
   display: flex;
@@ -906,6 +1013,9 @@ tbody tr:last-child td {
 #eval-table tbody tr:hover,
 .eval-diag-table tbody tr:hover {
   background: #f7f8fa;
+}
+#eval-gold-section.hidden {
+  display: none;
 }
 .eval-diag-title {
   margin: 22px 0 2px;

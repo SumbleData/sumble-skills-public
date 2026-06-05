@@ -262,55 +262,33 @@ def save_weights(state_config: dict[str, Any], weights: dict[str, Any]) -> dict[
     return on_disk
 
 
-def write_scored_csv(scores: list[dict[str, Any]]) -> int:
-    """Persist the app's current scores into data.csv (full data preserved).
-
-    `scores` is [{id, score, rank}, ...] keyed by org_id — the exact values the
-    client is showing, so the saved file matches the app. (The portable
-    score_accounts.py can differ because it drops non-API signals, so we take the
-    client's numbers rather than recomputing.) Adds/updates `score` + `rank`
-    columns; every row sharing an org_id gets that org's score. Row count and all
-    other columns are unchanged, so the CRM identity columns stay in the file."""
-    id_col = STATE["config"].get("id_column", "org_id")
-    spec = json.loads(SPEC_PATH.read_text())
-    data_path = APP_DIR / spec.get("data_csv", "data.csv")
-    if not data_path.exists():
-        return 0
-    by_id = {str(s.get("id")): s for s in (scores or [])}
-    with data_path.open(newline="", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        fieldnames = list(reader.fieldnames or [])
-        rows = list(reader)
-    for col in ("score", "rank"):
-        if col not in fieldnames:
-            fieldnames.append(col)
-    n = 0
-    for r in rows:
-        s = by_id.get(str(r.get(id_col)))
-        if s is not None:
-            r["score"] = s.get("score")
-            r["rank"] = s.get("rank")
-            n += 1
-        else:
-            r.setdefault("score", "")
-            r.setdefault("rank", "")
-    tmp = data_path.with_suffix(".csv.tmp")
-    with tmp.open("w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(rows)
-    os.replace(tmp, data_path)
-    return n
-
-
 # ---------- Bootstrap ------------------------------------------------------
+
+
+# account_category precedence when the same Sumble org appears more than once
+# (duplicate CRM records, or a whitespace candidate that also sits in the CRM):
+# keep the most "owned" category so the Evaluation tab keeps its positives and a
+# real CRM account never shows up as whitespace.
+_CATEGORY_RANK = {
+    "customer": 4,
+    "allocated": 3,
+    "unallocated": 2,
+    "whitespace_subsidiary": 1,
+    "whitespace": 0,
+}
+
+
+def _category_rank(row: dict[str, Any]) -> int:
+    if row.get("is_icp_gold"):
+        return _CATEGORY_RANK["customer"]
+    return _CATEGORY_RANK.get(str(row.get("account_category") or ""), 0)
 
 
 def _dedup_by_org(rows: list[dict[str, Any]], id_col: str) -> list[dict[str, Any]]:
     """Collapse rows that resolve to the same Sumble org (duplicate CRM records)
-    to one row per org_id, preferring a gold row so the Evaluation tab keeps its
-    positives. The on-disk data.csv is untouched (it keeps the full data); this
-    only affects what the app loads, scores, and shows."""
+    to one row per org_id, preferring the highest-precedence category (customer >
+    allocated > unallocated > whitespace). The on-disk data.csv is untouched (it
+    keeps the full data); this only affects what the app loads, scores, and shows."""
     best: dict[str, dict[str, Any]] = {}
     order: list[str] = []
     for r in rows:
@@ -318,7 +296,7 @@ def _dedup_by_org(rows: list[dict[str, Any]], id_col: str) -> list[dict[str, Any
         if key not in best:
             best[key] = r
             order.append(key)
-        elif not best[key].get("is_icp_gold") and r.get("is_icp_gold"):
+        elif _category_rank(r) > _category_rank(best[key]):
             best[key] = r
     return [best[k] for k in order]
 
@@ -327,7 +305,7 @@ def load_state() -> dict[str, Any]:
     if not SPEC_PATH.exists():
         raise FileNotFoundError(
             f"{SPEC_PATH.name} not found at {SPEC_PATH}. "
-            "Generate via the account-scoring skill."
+            "Generate via the sumble-account-scoring skill."
         )
     config = json.loads(SPEC_PATH.read_text())
 
@@ -338,8 +316,14 @@ def load_state() -> dict[str, Any]:
     # Show unique Sumble matches: duplicated CRM records that map to the same org
     # collapse to one row (data.csv on disk still holds every row).
     universe = _dedup_by_org(universe, id_col)
+    # in_crm is derived from account_category (the single source of truth):
+    # everything except whitespace is in the CRM. When no CRM was provided
+    # (Branch B) account_category is blank for every row → all in_crm True,
+    # has_categories False, and the category column/chips stay hidden.
     for r in universe:
-        r["in_crm"] = True
+        cat = str(r.get("account_category") or "")
+        r["account_category"] = cat
+        r["in_crm"] = cat in ("customer", "allocated", "unallocated")
 
     apply_derived(universe, config.get("derived_signals", []))
     maxes = normalise(universe, config["signals"])
@@ -365,6 +349,7 @@ def load_state() -> dict[str, Any]:
         slug_col,
         "in_crm",
         "is_icp_gold",
+        "account_category",
         "tags",
         *table_cols,
         *[m["column"] for m in multipliers],
@@ -374,6 +359,17 @@ def load_state() -> dict[str, Any]:
             seen.add(c)
 
     rows_out = [_row_payload(r, config, passthrough_cols, multipliers) for r in universe]
+
+    # Which account categories are present (customer/allocated/unallocated/
+    # whitespace). The client shows the Category column + filter chips ONLY when
+    # ≥2 distinct non-blank categories exist; a single-category (or Branch B
+    # blank) run keeps the table clean.
+    _cat_order = [
+        "customer", "allocated", "unallocated", "whitespace", "whitespace_subsidiary",
+    ]
+    present = {str(r.get("account_category") or "") for r in universe}
+    categories_present = [c for c in _cat_order if c in present]
+    has_categories = len(categories_present) >= 2
 
     # Build the universe-wide tag catalogue. Tag column is a pipe-delimited
     # string ("b2b|b2c|digital_native"); split, count, sort by frequency
@@ -409,6 +405,8 @@ def load_state() -> dict[str, Any]:
             "tag_multipliers": config.get("tag_multipliers", []),
             "available_tags": available_tags,
             "has_crm": True,
+            "has_categories": has_categories,
+            "categories_present": categories_present,
             "branding": config.get("branding", {}),
             "data_sources": config.get("data_sources", {}),
             "saved_at": config.get("saved_at"),

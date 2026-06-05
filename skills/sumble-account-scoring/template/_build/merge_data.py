@@ -116,6 +116,94 @@ def calibrate(universe: list[dict], gold: list[dict]) -> tuple[dict, list[dict]]
     return audit, multipliers_defaults
 
 
+def _has_tag(row: dict, tag: str) -> bool:
+    return tag in {t for t in str(row.get("tags") or "").split("|") if t}
+
+
+def passes_universe_filters(row: dict, filters: dict) -> bool:
+    """Universe hard-filters applied post-fetch to WHITESPACE candidates only
+    (never to the user's own CRM accounts): min employees, HQ-country whitelist,
+    exclude-professional-services-industry, and hard-exclude tags. The rank query
+    already pushes most of these, but this is the guaranteed safety net."""
+    if int(row.get("employee_count_int") or 0) < int(filters.get("min_employees", 0) or 0):
+        return False
+    hq_whitelist = filters.get("hq_country_whitelist") or []
+    if hq_whitelist and row.get("headquarters_country") not in hq_whitelist:
+        return False
+    if filters.get("exclude_professional_services_industry") and row.get(
+        "is_professional_services"
+    ):
+        return False
+    # Per-company industry hard-excludes (suggested from the gold set + knowledge,
+    # NOT a fixed list) — matched case-insensitively against the org's industry.
+    excl_industries = {str(s).strip().lower() for s in (filters.get("exclude_industries") or [])}
+    if excl_industries and str(row.get("industry") or "").strip().lower() in excl_industries:
+        return False
+    excluded = set(filters.get("hard_exclude_tags") or [])
+    if excluded & {t for t in str(row.get("tags") or "").split("|") if t}:
+        return False
+    return True
+
+
+def calibrate_industries(
+    all_rows: list[dict], gold_rows: list[dict], cap: int = 8
+) -> tuple[dict, list[dict]]:
+    """Gold-lift over the synthesized `industry__<slug>` tags (same policy
+    constants as the attribute calibration), so whole industries earn a
+    boost/penalty from the customer set. Capped to the `cap` strongest so the
+    default multiplier list stays readable."""
+    n_universe = len(all_rows)
+    n_gold = len(gold_rows)
+    industry_tags: set[str] = set()
+    for r in all_rows:
+        for t in str(r.get("tags") or "").split("|"):
+            if t.startswith("industry__"):
+                industry_tags.add(t)
+
+    audit: dict[str, dict] = {}
+    mults: list[dict] = []
+    for tag in sorted(industry_tags):
+        universe_pos = sum(1 for r in all_rows if _has_tag(r, tag))
+        gold_pos = sum(1 for r in gold_rows if _has_tag(r, tag))
+        universe_rate = universe_pos / n_universe if n_universe else 0.0
+        gold_rate = gold_pos / n_gold if n_gold else 0.0
+        lift = gold_rate / universe_rate if universe_rate > 0 else None
+
+        direction: str | None = None
+        pct = 0
+        note = ""
+        if universe_pos < TAG_LIFT_UNIVERSE_MIN:
+            note = f"universe positives <{TAG_LIFT_UNIVERSE_MIN} — neutral"
+        elif gold_pos == 0 and universe_rate >= ZERO_AND_HIGH_BASELINE:
+            pct, direction = PENALTY_CAP, "penalty"
+            note = f"0 customers in industry, baseline {universe_rate:.0%} — strong penalty"
+        elif gold_pos < TAG_LIFT_GOLD_MIN:
+            note = f"too few customer positives ({gold_pos}<{TAG_LIFT_GOLD_MIN}) — neutral"
+        elif lift is None:
+            note = "universe rate is zero — neutral"
+        elif lift >= NEUTRAL_LIFT_HIGH:
+            pct, direction = min(BOOST_CAP, round((lift - 1) * BOOST_SCALE)), "boost"
+        elif lift <= NEUTRAL_LIFT_LOW:
+            pct, direction = min(PENALTY_CAP, round((1 - lift) * PENALTY_SCALE)), "penalty"
+        else:
+            note = f"lift {lift:.2f} in neutral band — neutral"
+
+        if direction:
+            mults.append({"tag": tag, "pct": pct, "direction": direction})
+        audit[tag] = {
+            "universe_positives": universe_pos,
+            "gold_positives": gold_pos,
+            "universe_rate": round(universe_rate, 4),
+            "gold_rate": round(gold_rate, 4),
+            "lift": round(lift, 3) if lift is not None else None,
+            "direction": direction,
+            "pct": pct,
+            "note": note,
+        }
+    mults.sort(key=lambda m: -m["pct"])
+    return audit, mults[:cap]
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Merge endpoint responses into data.csv.")
     parser.add_argument("--raw", default="../_raw")
@@ -135,6 +223,15 @@ def main() -> None:
         json.loads(index_path.read_text()) if index_path.exists() else []
     )
 
+    # CRM org ids (from the whitespace exclusion resolve) so a whitespace
+    # candidate whose PARENT is a CRM account is relabelled `whitespace_subsidiary`
+    # (land-and-expand) instead of plain `whitespace`. No separate tab — it's just
+    # another filterable category in the one sheet.
+    crm_ids: set[int] = set()
+    crm_path = raw / "crm_matches.json"
+    if crm_path.exists():
+        crm_ids = {int(m["org_id"]) for m in json.loads(crm_path.read_text())}
+
     def build_row(resp_row: dict, meta: dict) -> dict | None:
         row = sumble_v6.build_data_row(resp_row, spec, plan)
         if row is None:
@@ -144,15 +241,33 @@ def main() -> None:
         # Sumble-matched name/url so a mismatch is visible in the table.
         row["crm_account_name"] = meta.get("crm_account_name") or ""
         row["crm_url"] = meta.get("crm_url") or ""
-        row["is_icp_gold"] = int(meta.get("is_gold") or 0)
+        # account_category is the single source of truth: customer / allocated /
+        # unallocated / whitespace / whitespace_subsidiary ("" in pure Branch B).
+        category = meta.get("account_category") or ""
+        parent_id = (resp_row.get("attributes") or {}).get("parent_id")
+        if category == "whitespace" and parent_id and int(parent_id) in crm_ids:
+            category = "whitespace_subsidiary"
+        row["account_category"] = category
+        row["is_icp_gold"] = int(category == "customer" or bool(meta.get("is_gold")))
         return row
 
+    universe_filters = spec.get("universe_filters", {})
     all_rows: list[dict] = []
+    dropped = 0
     for i, resp_row in enumerate(resp_orgs):
         meta = fetch_index[i] if i < len(fetch_index) else {}
         built = build_row(resp_row, meta)
-        if built is not None:
-            all_rows.append(built)
+        if built is None:
+            continue
+        # Apply the universe hard-filters to WHITESPACE candidates only — never to
+        # the user's own CRM accounts (they keep their seat regardless of size etc.).
+        if built["account_category"] in ("whitespace", "whitespace_subsidiary"):
+            if not passes_universe_filters(built, universe_filters):
+                dropped += 1
+                continue
+        all_rows.append(built)
+    if dropped:
+        print(f"Dropped {dropped} whitespace candidate(s) on universe hard-filters.")
 
     if not all_rows:
         raise SystemExit("No matched orgs in responses — nothing to write.")
@@ -161,8 +276,17 @@ def main() -> None:
     field_order = list(all_rows[0].keys())
 
     audit, multipliers_defaults = calibrate(all_rows, gold_rows)
+    industry_audit, industry_mults = calibrate_industries(all_rows, gold_rows)
+    multipliers_defaults = multipliers_defaults + industry_mults
     (raw / "_calibration_audit.json").write_text(
-        json.dumps({"attrs": audit, "multipliers_defaults": multipliers_defaults}, indent=2)
+        json.dumps(
+            {
+                "attrs": audit,
+                "industries": industry_audit,
+                "multipliers_defaults": multipliers_defaults,
+            },
+            indent=2,
+        )
     )
 
     data_csv = output_root / "data.csv"

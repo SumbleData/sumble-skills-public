@@ -27,17 +27,16 @@ and how you trigger it differ.
 | Skill | What it does | Guide |
 |---|---|---|
 | [`sumble-mcp`](skills/sumble-mcp) | Use the **Sumble MCP** itself. Gives agents the tool sequencing, query rules, workflow patterns, and credit guardrails for account research, prospecting, and list-building. | [MCP docs](https://docs.sumble.com/api/mcp) |
-| [`account-scoring`](skills/account-scoring) | Score **your own accounts**. Interviews you about your ICP, calibrates weights against your closed-won customers, and builds a tunable account-scoring app + portable scorer. | [Part 1 — the method](articles/01-account-score-should-tell-a-rep-what-to-do.md) · [Part 2 — build it](articles/02-build-an-account-score-you-can-prospect-from.md) |
-| [`account-whitespace`](skills/account-whitespace) | Find **net-new accounts**. Ranks Sumble's universe by your ICP and subtracts the accounts already in your CRM (subsidiaries of existing accounts get their own tab). | [Part 3 — whitespace](articles/03-find-your-next-accounts-whitespace.md) |
-| [`people-scoring`](skills/people-scoring) 🚧 | Score **people / leads**. Ranks the individual contacts most worth reaching out to, and emits a production scorer for an enriched CRM. | *(work in progress)* |
+| [`sumble-account-scoring`](skills/sumble-account-scoring) | Score **your own accounts** *and* find **net-new whitespace** — one skill, pick the objective. Interviews you about your ICP, calibrates weights against your closed-won customers, builds a tunable scoring app + portable scorer, and in whitespace mode ranks Sumble's universe by your ICP minus the accounts you already own (subsidiaries of existing accounts flagged land-and-expand). | [Part 1 — the method](articles/01-account-score-should-tell-a-rep-what-to-do.md) · [Part 2 — build it](articles/02-build-an-account-score-you-can-prospect-from.md) |
+| [`sumble-people-scoring`](skills/sumble-people-scoring) 🚧 | Score **people / leads**. Ranks the individual contacts most worth reaching out to, and emits a production scorer for an enriched CRM. | *(work in progress)* |
 
-A common workflow: tune a model on your accounts with **account-scoring**, point
-the same model at net-new companies with **whitespace**, then prioritize the
-individual contacts with **people-scoring**.
+A common workflow: tune a model on your accounts with **sumble-account-scoring**,
+run it in whitespace mode to surface net-new companies, then prioritize the
+individual contacts with **sumble-people-scoring**.
 
-> 🚧 **`people-scoring` is a work in progress** — it's usable but still
-> being refined, and doesn't have a written guide yet. `account-scoring` and
-> `whitespace` are stable.
+> 🚧 **`sumble-people-scoring` is a work in progress** — it's usable but still
+> being refined, and doesn't have a written guide yet. `sumble-account-scoring`
+> is stable.
 
 ### See it in action
 
@@ -65,9 +64,8 @@ agents and installs into the agent you choose.
 
 ```bash
 npx skills add SumbleData/sumble-skills --skill sumble-mcp
-npx skills add SumbleData/sumble-skills --skill account-scoring
-npx skills add SumbleData/sumble-skills --skill account-whitespace
-npx skills add SumbleData/sumble-skills --skill people-scoring
+npx skills add SumbleData/sumble-skills --skill sumble-account-scoring
+npx skills add SumbleData/sumble-skills --skill sumble-people-scoring
 ```
 
 To install globally for a specific agent without prompts, add `-g -a <agent>
@@ -75,7 +73,7 @@ To install globally for a specific agent without prompts, add `-g -a <agent>
 
 ```bash
 npx skills add SumbleData/sumble-skills --skill sumble-mcp -g -a codex -y
-npx skills add SumbleData/sumble-skills --skill account-scoring -g -a claude-code -y
+npx skills add SumbleData/sumble-skills --skill sumble-account-scoring -g -a claude-code -y
 ```
 
 List or install the whole repo:
@@ -90,15 +88,13 @@ URL-shaped command:
 
 ```bash
 npx skills add https://github.com/SumbleData/sumble-skills/tree/main/skills/sumble-mcp
-npx skills add https://github.com/SumbleData/sumble-skills/tree/main/skills/account-scoring
-npx skills add https://github.com/SumbleData/sumble-skills/tree/main/skills/account-whitespace
-npx skills add https://github.com/SumbleData/sumble-skills/tree/main/skills/people-scoring
+npx skills add https://github.com/SumbleData/sumble-skills/tree/main/skills/sumble-account-scoring
+npx skills add https://github.com/SumbleData/sumble-skills/tree/main/skills/sumble-people-scoring
 ```
 
 Start a new agent session after installing. In Codex, ask it to *"use the
-account-scoring skill"* or *"use the sumble-mcp skill."* In Claude Code,
-run `/account-scoring`, `/account-whitespace`,
-`/people-scoring`, or `/sumble-mcp`.
+sumble-account-scoring skill"* or *"use the sumble-mcp skill."* In Claude Code,
+run `/sumble-account-scoring`, `/sumble-people-scoring`, or `/sumble-mcp`.
 
 > Connect the Sumble MCP once per tool — see [docs.sumble.com/api/mcp](https://docs.sumble.com/api/mcp).
 > Each skill's own `README.md` has a step-by-step, no-experience-needed walkthrough.
@@ -108,7 +104,7 @@ run `/account-scoring`, `/account-whitespace`,
 The agent walks you through a short, scripted interview (your company, your ICP,
 your account list), pulls the right Sumble data, calibrates against your
 closed-won accounts, and writes the app at `account_scoring/<your-company>/`
-(or `account_whitespace/…`, `people_scoring/…`). Then:
+(or `people_scoring/…`). Then:
 
 ```bash
 cd account_scoring/<your-company>
@@ -121,12 +117,11 @@ To score a much larger list once weights are tuned, hand the generated
 
 ## Learn the method
 
-The thinking behind the account-scoring and whitespace skills is written up as a
-three-part series in [`articles/`](articles):
+The thinking behind the account-scoring skill (whitespace included) is written up
+as a two-part series in [`articles/`](articles):
 
 1. [An account score should tell a rep what to do — not just rank accounts](articles/01-account-score-should-tell-a-rep-what-to-do.md)
-2. [Build an account score you can prospect from — in an afternoon](articles/02-build-an-account-score-you-can-prospect-from.md) *(includes the full scoring math)*
-3. [Find your next accounts with the score you already built](articles/03-find-your-next-accounts-whitespace.md)
+2. [Build an account score you can prospect from — in an afternoon](articles/02-build-an-account-score-you-can-prospect-from.md) *(includes the full scoring math and whitespace)*
 
 ## License
 
