@@ -31,6 +31,8 @@ Bias towards attributes that reps can understand and take action on. Some exampl
 
 When Sumble provides these attributes we also offer a **deep link**, so the score component can lead directly to outreach. An attribute that reads "55 teams at Walmart are using Langchain"? (Click through)[https://sumble.com/l/RuS8GoIBbO] to those teams (as well as the key leaders on those teams). "200 AI Engineers at Walmart"? (Click through)[https://sumble.com/l/hjwCfV4t9J] and drop them straight into a sequence. The rep never asks "why an 84?"; they click, get context and named contacts and a reason to reach out.
 
+**See it live:** explore the [account scoring calibration demo](https://account-scoring-demo.sumble.com/) — a sample book scored with sliders to retune the weights and per-signal deep links on every account.
+
 ## Avoid having your model purely proxy company size
 
 Enterprises have more of everything, so raw counts are just a headcount ranking in disguise. The best models avoid being a proxy for company size. A few fixes keep size from dominating. 

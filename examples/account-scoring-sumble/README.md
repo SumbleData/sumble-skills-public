@@ -5,7 +5,7 @@ skill produces — built against Sumble's own ICP over a universe of ~4,090 publ
 companies. Drag the sliders, watch the ranking re-sort, click a row for the
 per-signal breakdown.
 
-**▶ Live demo: https://sumble-account-scoring-demo-878803865730.us-west1.run.app**
+**▶ Live demo: https://account-scoring-demo.sumble.com/**
 
 > ## ⚠️ The "gold" set here is FICTITIOUS
 >

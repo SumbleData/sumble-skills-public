@@ -18,6 +18,8 @@ Part 1 argued that a good account score is the start of a prospecting conversati
 
 Once your tool is set up, open it and run the skill: on Claude Code type `/sumble-account-scoring`; on Codex or Cursor, ask it to use the sumble-account-scoring skill.
 
+**Want to see an example final output?** Explore the [account scoring calibration demo](https://account-scoring-demo.sumble.com/) — the end output of the skill, with sliders to retune the weights and per-signal deep links on a sample book.
+
 ## 1. The interview
 
 Short and scripted. It pulls a first draft of your **ICP** — personas, technologies, projects — from your Sumble profile, and you edit it in plain English until it's right. Just say "include funding signals" if a recent raise tends to precede buying in your market.

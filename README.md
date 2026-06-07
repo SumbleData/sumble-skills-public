@@ -40,7 +40,7 @@ individual contacts with **sumble-people-scoring**.
 
 ### See it in action
 
-**▶ Live demo: https://sumble-account-scoring-demo-878803865730.us-west1.run.app**
+**▶ Live demo: https://account-scoring-demo.sumble.com/**
 
 [`examples/account-scoring-sumble`](examples/account-scoring-sumble) is a real,
 runnable app the account-scoring skill produced — `python app.py`, drag sliders,
