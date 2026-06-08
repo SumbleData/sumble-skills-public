@@ -1,6 +1,17 @@
-# An account score should tell a rep what to do — not just rank accounts
+# Account Scoring Should Explain, Not Just Rank
+
+Most account scores spit out a number. The best ones explain why an account matters and what the first move should be.
 
 *Part 1 of 2.* Part 2 — [Build an account score you can prospect from](02-build-an-account-score-you-can-prospect-from.md).
+
+
+## TLDR
+- Show reps the rank and the linked evidence, not just the raw score.
+- Break the score into segments you can read (e.g. size and growth/momentum).
+- Avoid large accounts winning by default by using growth and concentration as attributes.
+- Calibrate your scores against closed-won accounts (or a subset of accounts that are a strong ICP fit).
+- Use the same model to find whitespace accounts — strong-fit companies not yet in your CRM.
+
 
 Most account scores get ignored. They're either a proxy for company size or a black-box number. Reps tune out the first because it says nothing new, and the second because they can't see why an account got an 82.
 
@@ -16,6 +27,7 @@ Done well, an account score becomes load-bearing infrastructure for the whole go
 - **Whitespace** — point the same model at the accounts you *don't* have to find the net-new ones worth pursuing.
 - **Account-based marketing** — focus ABM spend and air cover on the accounts the model says matter.
 - **Lead routing** — when a lead comes in, its account score helps decide who works it and how fast.
+- **Disqualification** - Filter out accounts that aren't an ICP fit
 
 Get the score right once and it lifts the rest of your GTM engine. That's the payoff that justifies meaningful attention.
 
@@ -31,15 +43,13 @@ Bias towards attributes that reps can understand and take action on. Some exampl
 
 When Sumble provides these attributes we also offer a **deep link**, so the score component can lead directly to outreach. An attribute that reads "55 teams at Walmart are using Langchain"? (Click through)[https://sumble.com/l/RuS8GoIBbO] to those teams (as well as the key leaders on those teams). "200 AI Engineers at Walmart"? (Click through)[https://sumble.com/l/hjwCfV4t9J] and drop them straight into a sequence. The rep never asks "why an 84?"; they click, get context and named contacts and a reason to reach out.
 
-**See it live:** explore the [account scoring calibration demo](https://account-scoring-demo.sumble.com/) — a sample book scored with sliders to retune the weights and per-signal deep links on every account.
-
 ## Avoid having your model purely proxy company size
 
 Enterprises have more of everything, so raw counts are just a headcount ranking in disguise. The best models avoid being a proxy for company size. A few fixes keep size from dominating. 
 
 If your sweet spot is small but **fast-growing**, weight the growth signals heavily — above all, growth in your ICP personas. Fast-growing companies cross new scale points often, and each scale point is a moment they outgrow a tool and go looking for a new one, which makes them fertile ground for a modern solution. Lean on growth metrics here and the right accounts pop to the top: a company like Anthropic (~4K employees) can be every bit as compelling as a Walmart (2MM employees). The flip side is just as useful: a company that isn't growing often isn't in pain, because it isn't hitting the limits that trigger a change — so a big, static account can be a worse bet than a smaller one accelerating into your category.
 
-If what matters is that **your solution is central** to the business, weight concentration instead — a high share of your ICP persona, or of teams running the relevant technologies. If you sell to DevOps engineers, a company where 8% of headcount is a DevOps engineer is a far better fit than one where it's 0.08%: your product sits at the core of how they operate, not off in a corner.
+If what matters is that **your solution is central** to the business, weight concentration — a high share of your ICP persona, or of teams running the relevant technologies. If you sell to DevOps engineers, a company where 5% of headcount is a DevOps engineer is a far better fit than one where it's 0.05%: your product sits at the core of how they operate, not off in a corner.
 
 We also recommend a formula that keeps large outlier numbers from dominating the score — more on that in [part 2](02-build-an-account-score-you-can-prospect-from.md).
 
@@ -60,7 +70,7 @@ And the segments are yours to redefine. Rename them, reweight them, or cut them 
 
 ## Calibrate against the deals you've won
 
-Weight factors so that your scoring does a good job of fitting to your closed-won accounts. Do you tend to do better with fast-growing companies? Give growth a bigger weight. Do you typically sell to AI-native or digitally-native companies? Give those companies a boost. Are IT-services shops partners, not buyers? Give that category a penalty. The same gold set powers an evaluation view: tune the weights and watch whether your known customers actually rise to the top.
+Weight factors so that your scoring does a good job of fitting to your closed-won accounts. Do you tend to do better with fast-growing companies? Give growth in key personas a bigger weight. Do you typically sell to AI-native or digitally-native companies? Give those companies a boost. Are IT-services shops partners, not buyers? Give that category a penalty. The same gold set powers an evaluation view: tune the weights and watch whether your known customers actually rise to the top.
 
 ## Start with one model, not a model per market
 
