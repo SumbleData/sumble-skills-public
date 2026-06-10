@@ -154,6 +154,26 @@ account_scoring/<company>/
   drops only its contribution column (its raw column stays). The **Download
   score sheet** button produces the same sheet from the current sliders.
 
+**Two score-sheet non-negotiables (NEVER strip these — the template enforces
+both with fallbacks):**
+1. **Deep links, always.** Every Sumble count/growth signal carries a
+   `sumble_link` spec in the weights config (`build_weights.py` writes them — do
+   NOT drop them if you edit the config by hand). The app's per-row breakdown,
+   `score.csv`, the in-app **Download score sheet**, and `score_accounts.py`
+   output all emit per-signal deep links: they prefer the API's canonical
+   `{column}_link` from `data.csv` and fall back to building the URL from the
+   `sumble_link` spec, so links appear even when one source is missing.
+   `sumble_url` (the org's Sumble page) is always present. Concentration
+   signals are the one deliberate exception (no per-signal deep link).
+2. **HQ country, always.** `headquarters_country` is fetched for every org and
+   `score.csv`, the in-app download, and `score_accounts.py` output always
+   carry the column (blank when unknown). Don't drop it from `data.csv`.
+
+Before handing over (Stage 4), spot-check the `score.csv` header with your file
+tools: it must contain `headquarters_country`, `sumble_url`, and at least one
+`<signal> link` column. If any is missing, the config or data was built wrong —
+fix it before telling the user the app is ready.
+
 **Zero-dependency rule:** `app.py` uses only the stdlib (`csv`, `json`,
 `math`, `http.server`) — no `requirements.txt`, no third-party imports,
 so any teammate can `python app.py` on the first try.

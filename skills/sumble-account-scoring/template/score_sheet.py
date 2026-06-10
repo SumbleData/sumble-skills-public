@@ -38,6 +38,10 @@ IDENTITY_PREFERRED = [
     "headquarters_country", "industry", "list_type", "crm_parent_name",
 ]
 
+# Columns the sheet must carry even when data.csv lacks them (emitted blank):
+# the HQ country is part of the score-sheet contract.
+ALWAYS_EMIT = {"headquarters_country"}
+
 
 def _f(v: object) -> float:
     try:
@@ -211,13 +215,18 @@ def build_score_sheet(app_dir: Path, weights_path: Path | None = None) -> dict[s
     # in their data.csv order — followed by score, rank, contributions, links. So
     # the user never needs to join score.csv back to data.csv; data.csv is just
     # the immutable raw archive the app re-scores from.
-    ident = [c for c in IDENTITY_PREFERRED if c in raw_fields] + [
-        c for c in raw_fields if c not in IDENTITY_PREFERRED
-    ]
+    ident = [
+        c for c in IDENTITY_PREFERRED if c in raw_fields or c in ALWAYS_EMIT
+    ] + [c for c in raw_fields if c not in IDENTITY_PREFERRED]
     base_url = config.get("sumble_url_base", "https://sumble.com/orgs/")
     slug_col = config.get("slug_column", "slug")
-    # Per-signal deep links for the live signals that carry a sumble_link.
-    link_keys = [k for k in live if signals[k].get("sumble_link")]
+    # Per-signal deep links: a signal qualifies via its sumble_link spec OR a
+    # {column}_link column in data.csv — either source alone is enough, so the
+    # sheet always carries links even when one of them is missing.
+    link_keys = [
+        k for k in live
+        if signals[k].get("sumble_link") or f"{signals[k]['column']}_link" in raw_fields
+    ]
 
     # Layout: rank (far left) → all data columns → score → contribution cols →
     # deep links (org page + one per signal) on the far right. Contributions sum
@@ -238,9 +247,14 @@ def build_score_sheet(app_dir: Path, weights_path: Path | None = None) -> dict[s
             row = [rank_of[i]] + [rows[i].get(c, "") for c in ident] + [scores[i]]
             row += [contrib[k][i] for k in live]
             row += [org_url]
-            # Per-signal links come straight from the API ({column}_link in
-            # data.csv), not a hand-built URL.
-            row += [rows[i].get(f"{signals[k]['column']}_link", "") for k in link_keys]
+            # Per-signal links prefer the API's canonical URL ({column}_link in
+            # data.csv); when that's missing or empty, build the URL from the
+            # signal's sumble_link spec so the sheet is never linkless.
+            row += [
+                rows[i].get(f"{signals[k]['column']}_link", "")
+                or _sumble_link(base_url, slug, signals[k].get("sumble_link"))
+                for k in link_keys
+            ]
             w.writerow(row)
     tmp2.replace(score_path)
 

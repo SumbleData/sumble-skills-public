@@ -1147,8 +1147,11 @@ function updateBreakdown() {
     const raw = row[`raw_${key}`] || 0;
     const norm = row[`norm_${key}`] || 0;
     const contrib = weightAbs * norm; // already in 0-100 scaled
-    // Per-signal deep link comes straight from the API ({column}_link in data).
-    const href = row[`${spec.column}_link`] || null;
+    // Per-signal deep link: prefer the API's canonical URL ({column}_link in
+    // data); fall back to building one from the signal's sumble_link spec so
+    // the breakdown always links into Sumble.
+    const href =
+      row[`${spec.column}_link`] || buildSumbleLink(sumbleBase, slug, spec.sumble_link);
     items.push({
       label: spec.label,
       unit: spec.unit || "",
@@ -1458,15 +1461,22 @@ function downloadCsv() {
   const live = keys
     .filter((k) => Math.abs(totals[k] || 0) > 1e-9)
     .sort((a, b) => totals[b] - totals[a]);
-  const linkKeys = live.filter((k) => signals[k].sumble_link);
+  // A signal qualifies for a link column via its sumble_link spec OR a
+  // {column}_link column in the data — either alone is enough (matches
+  // score_sheet.py), so the export always carries deep links.
+  const sample = rows[0];
+  const linkKeys = live.filter(
+    (k) => signals[k].sumble_link || `${signals[k].column}_link` in sample,
+  );
 
   // Identity columns present on the row (matches score_sheet.py).
+  // headquarters_country is always emitted (blank when unknown) — it's part
+  // of the score-sheet contract.
   const IDENT = [
     "org_id", "name", "url", "account_category", "employee_count_int",
     "headquarters_country", "industry", "list_type", "crm_parent_name",
   ];
-  const sample = rows[0];
-  const ident = IDENT.filter((c) => c in sample);
+  const ident = IDENT.filter((c) => c in sample || c === "headquarters_country");
   // Company Sumble page link sits in the identity block, after the company's
   // own url (or after name). Sentinel "sumble_url" -> org link at output time.
   const left = [];
@@ -1516,8 +1526,17 @@ function downloadCsv() {
     const leftVals = left.map((c) => esc(c === "sumble_url" ? orgUrl : row[c]));
     const out = [esc(r + 1), ...leftVals, esc(r4(scores[idx]))];
     for (const k of live) out.push(esc(r4(contrib[idx][k])));
-    // Per-signal links come from the API ({column}_link), not a hand-built URL.
-    for (const k of linkKeys) out.push(esc(row[`${signals[k].column}_link`] || ""));
+    // Per-signal links prefer the API's canonical URL ({column}_link); fall
+    // back to building one from the sumble_link spec so links are never blank.
+    for (const k of linkKeys) {
+      out.push(
+        esc(
+          row[`${signals[k].column}_link`] ||
+            buildSumbleLink(base, slug, signals[k].sumble_link) ||
+            "",
+        ),
+      );
+    }
     lines.push(out.join(","));
   });
 

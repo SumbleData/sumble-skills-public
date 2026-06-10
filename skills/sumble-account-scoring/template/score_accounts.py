@@ -37,6 +37,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote_plus, urlencode
 
 APP_DIR = Path(__file__).resolve().parent
 API_URL = os.environ.get("SUMBLE_API_BASE", "https://api.sumble.com/v6") + "/organizations"
@@ -391,6 +392,29 @@ def score_row(row: dict, config: dict, eff: dict[str, float]) -> float:
 # ---------- Per-account pipeline ---------------------------------------------
 
 
+def sumble_link(base: str, slug: str, spec: dict | None) -> str:
+    """Per-org Sumble deep link for a signal's sumble_link spec — same URL
+    shape as the app's buildSumbleLink (filters → advanced-search `as=` JSON)."""
+    if not spec or not slug:
+        return ""
+    path = spec.get("path", "") or ""
+    url = f"{base}{slug}{path}"
+    groups = [
+        {"operator": "OR", "fields": {field: {"include": values, "exclude": []}}}
+        for field, values in (spec.get("filters") or {}).items()
+        if isinstance(values, list) and values
+    ]
+    if not groups:
+        return url
+    params: list[tuple[str, str]] = []
+    if "people" in path:
+        params += [("sort", "Sumble Lead Score"), ("desc", "1")]
+    params.append(
+        ("as", json.dumps({"operator": "AND", "children": groups}, separators=(",", ":")))
+    )
+    return url + "?" + urlencode(params, quote_via=quote_plus)
+
+
 def build_row(account: dict, resp_org: dict, config: dict, eff: dict[str, float]) -> dict:
     attrs = resp_org.get("attributes") or {}
     ents = {(_entity_key(e)): e for e in (resp_org.get("entities") or [])}
@@ -399,21 +423,33 @@ def build_row(account: dict, resp_org: dict, config: dict, eff: dict[str, float]
     if industry == "Professional Services" and "professional_services" not in tags:
         tags.append("professional_services")
 
+    slug = attrs.get("slug") or ""
+    link_base = config.get("sumble_url_base", "https://sumble.com/orgs/")
+
     row: dict[str, Any] = dict(account)
     row["matched_org_id"] = attrs.get("id")
     row["matched_domain"] = attrs.get("url")
     row["name"] = attrs.get("name") or account.get("name") or ""
     row["industry"] = industry
+    # Always carried (blank when unmatched) — part of the score-sheet contract.
+    row["headquarters_country"] = attrs.get("headquarters_country") or ""
     row["employee_count_int"] = _exact_employee_count(attrs)
     row["jobs_count"] = int(attrs.get("jobs_count") or 0)
     row["teams_count"] = int(attrs.get("teams_count") or 0)
     row["tags"] = "|".join(tags)
     row["is_it_services"] = 1 if "it_services" in tags else 0
     row["is_professional_services"] = 1 if industry == "Professional Services" else 0
+    # Deep links: the org page, plus one per signal that carries a sumble_link
+    # spec — so the scored output is clickable, like the app's score.csv.
+    row["sumble_url"] = f"{link_base}{slug}" if slug else ""
 
     for key in eff:
         sig = config["signals"][key]
         row[sig["column"]] = signal_raw(sig, ents, attrs)
+        if sig.get("sumble_link"):
+            row[f"{sig['column']}_link"] = sumble_link(
+                link_base, slug, sig.get("sumble_link")
+            )
 
     row["score"] = round(score_row(row, config, eff), 4) if attrs.get("id") else 0.0
     return row
@@ -471,7 +507,9 @@ def main() -> None:
         )
 
     scored.sort(key=lambda r: r.get("score", 0), reverse=True)
-    fieldnames: list[str] = []
+    for rank, r in enumerate(scored, 1):
+        r["rank"] = rank
+    fieldnames: list[str] = ["rank"]
     for r in scored:
         for k in r:
             if k not in fieldnames:

@@ -13,7 +13,7 @@ Part 1 argued that a good account score is the start of a prospecting conversati
 ## What you need
 
 - One of three coding agents: **Claude Code**, **OpenAI Codex**, or **Cursor**. New to these tools? Each has a plain-English, **step-by-step setup appendix at the end of this page** — start there.
-- The **Sumble account-scoring skill** — install it with one `npx skills` command (the appendix shows exactly how for each tool).
+- The **Sumble account-scoring skill** — installed in step 1 below, with one `npx skills` command or by copying a folder.
 - A **Sumble account + API key** ([sumble.com/account](https://sumble.com/account)) and the **Sumble MCP** connected ([docs.sumble.com/api/mcp](https://docs.sumble.com/api/mcp)).
 - To score your own accounts: your **CRM accounts** (at least `name` and `domain`) — provided either as a **CSV** (exported from your CRM, a spreadsheet, or a warehouse) or pulled directly from a connected **MCP / API** source. The skill can use up to three things, and you can hand them over as **one table with flag columns** or as **separate lists**:
   - your **whole CRM universe** (every account),
@@ -22,19 +22,39 @@ Part 1 argued that a good account score is the start of a prospecting conversati
 
   None are required — with nothing, the skill scores Sumble's universe — but closed-won is the one worth digging up: it powers the evaluation that checks your known-good accounts actually rise to the top. Rep allocation lets the skill flag accounts that *should* be owned but aren't.
 
-Once your tool is set up, open it and run the skill: on Claude Code type `/sumble-account-scoring`; on Codex or Cursor, ask it to use the sumble-account-scoring skill.
-
 **Want to see an example final output?** Explore the [account scoring calibration demo](https://account-scoring-demo.sumble.com/) — the end output of the skill, with sliders to retune the weights and per-signal deep links on a sample book.
 
-## 1. The interview
+## 1. Install the skill
+
+A skill is just a folder of instructions your coding agent reads — there are two ways to get it.
+
+**Have `npx`?** (it ships with [Node.js](https://nodejs.org)) — one command installs the skill into whichever agents you choose:
+
+```bash
+npx skills add SumbleData/sumble-skills --skill sumble-account-scoring
+```
+
+The installer detects your coding agents and asks where to install. For a no-prompt global install into one agent, add `-g -a claude-code -y`, `-g -a codex -y`, or the matching agent name.
+
+**No `npx`? No git? No problem** — install it by hand:
+
+1. Download the skills repo as a ZIP (no git needed): [github.com/SumbleData/sumble-skills → Code → Download ZIP](https://github.com/SumbleData/sumble-skills/archive/refs/heads/main.zip), then unzip it.
+2. Copy the `skills/sumble-account-scoring` folder into your agent's skills directory (`~` is your home folder; create the directory if it doesn't exist):
+   - **Claude Code:** `~/.claude/skills/sumble-account-scoring`
+   - **OpenAI Codex:** `~/.codex/skills/sumble-account-scoring`
+   - **Cursor:** `~/.cursor/skills/sumble-account-scoring`
+
+Either way, start a **new agent session** so the skill is picked up, then run it: on Claude Code type `/sumble-account-scoring`; on Codex or Cursor, ask it to use the sumble-account-scoring skill.
+
+## 2. The interview
 
 Short and scripted. It pulls a first draft of your **ICP** — personas, technologies, projects — from your Sumble profile, and you edit it in plain English until it's right. Just say "include funding signals" if a recent raise tends to precede buying in your market.
 
-It also proposes the score's **segments** — the top-level lenses it breaks the number into. The default is three — **Size** (how big the opportunity is), **Growth & momentum** (whether now is the time), and **Concentration** (how strong the fit is) — with a starting blend of ~50/30/20. That ~50/30/20 is a **default starting point, not the final weighting**: the skill fits the blend to your closed-won deals later (step 3). Keep them, reweight them, or redefine them — the skill will suggest a **business-unit breakdown** if you sell distinct product lines (e.g. an OCI-fit segment and an Apps-fit segment, each scored on its own personas and tech). A signal can sit in more than one segment when it belongs to both.
+It also proposes the score's **segments** — the top-level lenses it breaks the number into. The default is three — **Size** (how big the opportunity is), **Growth & momentum** (whether now is the time), and **Concentration** (how strong the fit is) — with a starting blend of ~50/30/20. That ~50/30/20 is a **default starting point, not the final weighting**: the skill fits the blend to your closed-won deals later (step 4). Keep them, reweight them, or redefine them — the skill will suggest a **business-unit breakdown** if you sell distinct product lines (e.g. an OCI-fit segment and an Apps-fit segment, each scored on its own personas and tech). A signal can sit in more than one segment when it belongs to both.
 
 This is also where you fold in your **first-party data** if you have it — marketing engagement (webinars, whitepapers, events) and PLG usage of your free product. Point the skill at a CSV (or a connected source) keyed by account and those become weighted factors right alongside the Sumble signals — woven into whichever segment fits, or a segment of their own.
 
-## 2. Which accounts to score
+## 3. Which accounts to score
 
 Every account lands in one **category** — `customer` (closed-won), `allocated` (in CRM, owned by a rep), `unallocated` (in CRM, no owner), or `whitespace` (a strong-fit org *not* in your CRM). The app shows that category as a column and lets you filter on it, so one ranked list serves territory planning, allocation gaps, and net-new all at once.
 
@@ -44,7 +64,7 @@ Every account lands in one **category** — `customer` (closed-won), `allocated`
 
 It shows a credit estimate before any large pull, then builds the app.
 
-## 3. Tune — and click through
+## 4. Tune — and click through
 
 ```bash
 cd account_scoring/<your-company>
@@ -59,7 +79,7 @@ If you loaded CRM lists, the **category chips** above the table filter to custom
 
 **It fits to your wins — carefully.** Mark your closed-won accounts as your *gold* set and the skill calibrates to them automatically, two ways. First it learns **tag multipliers** from your Sumble org tags — whatever's over-represented among your wins (digital-native or AI-native companies) earns a boost, whatever's under-represented (IT-services or professional-services firms, which are usually partners not buyers) a penalty. These are *applied* by default — the app opens with them on, and you can tune or drop any in the per-tag widget, or add ones the gold set is too small to find ("we don't sell to Defense — penalize it"). Calibration runs over your org tags, not a per-industry multiplier; whole industries you obviously don't sell to are handled by excluding or penalizing them during the interview rather than as learned industry weights. Second it **fits the weights themselves**: the skill makes an intelligent first guess at the starting weights, then a small solver takes a deliberately **light pass** — nudging only the segment blend and category weights so your gold accounts separate better. It stays coarse on purpose to avoid overfitting: it **never tunes at the most granular level** (the individual job functions, technologies, and projects keep their default within-segment weighting), shrinks every change back toward the defaults, cross-validates on held-out wins, and keeps the result only if it generalizes; on a thin gold set it doesn't move at all. The sliders open at those values as a **starting point** — there may be good reasons to override them, and they're entirely yours to tune. The **Evaluation tab** shows the payoff: it buckets the scored sample and reports how many gold accounts land near the top (a *lift* above 1.0 beats random). It also breaks down **where each category lands in the overall ranking** — mean, median, and spread of rank for customers, allocated, unallocated, and whitespace — so you can confirm at a glance that your customers cluster near the top and see how your whitespace and unallocated accounts stack up against them. Drag, watch the gold rise, then **Save** — it writes your tuned weights and one complete `score.csv`: every account's data, score, rank, category, per-signal contributions, and deep links in a single file (the raw `data.csv` stays untouched as the archive). Nothing auto-saves.
 
-## 4. Score your whole book — and keep it fresh
+## 5. Score your whole book — and keep it fresh
 
 Two artifacts come out of tuning:
 
@@ -256,7 +276,7 @@ These coding agents are just chat apps that can run commands and edit files on y
    ```bash
    npx skills add SumbleData/sumble-skills --skill sumble-account-scoring
    ```
-   The installer detects your coding agents and asks where to install. For a no-prompt global install into one agent, add `-g -a claude-code -y`, `-g -a codex -y`, or the matching agent name.
+   The installer detects your coding agents and asks where to install. For a no-prompt global install into one agent, add `-g -a claude-code -y`, `-g -a codex -y`, or the matching agent name. No `npx` (or no git)? Step 1 above shows the manual install: download the repo ZIP and copy the `skills/sumble-account-scoring` folder into your agent's skills directory.
 4. **Have your account list ready** (recommended): a spreadsheet saved as a `.csv` with at least `name` and `domain` columns — plus, if you can, a column flagging your **customers** and one for the **account owner / rep**.
 
 ### Claude Code

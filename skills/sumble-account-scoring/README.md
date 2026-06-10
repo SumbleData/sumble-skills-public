@@ -45,22 +45,39 @@ drive its score — and each signal deep-links into Sumble.
 
 ## Install & run
 
-Install the skill with `npx skills`; the CLI detects supported agents and
-installs into the agent you choose.
+### With `npx` (recommended)
+
+Install the skill with `npx skills` (ships with [Node.js](https://nodejs.org));
+the CLI detects supported agents and installs into the agent you choose.
 
 ```bash
-npx skills add SumbleData/sumble-skills --skill account-scoring
+npx skills add SumbleData/sumble-skills --skill sumble-account-scoring
 ```
 
 To install globally for a specific agent without prompts:
 
 ```bash
-npx skills add SumbleData/sumble-skills --skill account-scoring -g -a codex -y
-npx skills add SumbleData/sumble-skills --skill account-scoring -g -a claude-code -y
+npx skills add SumbleData/sumble-skills --skill sumble-account-scoring -g -a codex -y
+npx skills add SumbleData/sumble-skills --skill sumble-account-scoring -g -a claude-code -y
 ```
 
-Start a new agent session, then run `/account-scoring` in Claude Code or ask
-Codex/Cursor to **"use the account-scoring skill."**
+### Without `npx` (no Node, no git needed)
+
+A skill is just a folder — you can install it by hand:
+
+1. Download this repo as a ZIP:
+   [github.com/SumbleData/sumble-skills → Code → Download ZIP](https://github.com/SumbleData/sumble-skills/archive/refs/heads/main.zip),
+   then unzip it.
+2. Copy the `skills/sumble-account-scoring` folder into your agent's skills
+   directory (`~` is your home folder; create the directory if it doesn't exist):
+   - **Claude Code:** `~/.claude/skills/sumble-account-scoring`
+   - **OpenAI Codex:** `~/.codex/skills/sumble-account-scoring`
+   - **Cursor:** `~/.cursor/skills/sumble-account-scoring`
+
+### Run it
+
+Start a new agent session, then run `/sumble-account-scoring` in Claude Code or
+ask Codex/Cursor to **"use the sumble-account-scoring skill."**
 
 ## How it works
 

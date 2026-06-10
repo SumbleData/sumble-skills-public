@@ -19,7 +19,7 @@ A score earns its place only if a rep can read it, trust it, and *act on it*. A 
 
 ## Why it's worth getting right
 
-Done well, an account score becomes load-bearing infrastructure for the whole go-to-market motion — not a vanity metric, but the thing a surprising number of decisions quietly key off:
+Done well, an account score becomes load-bearing infrastructure for the whole go-to-market motion — the thing a surprising number of decisions quietly key off:
 
 - **Account allocation** — make sure your best accounts are actually assigned to a rep, not stranded unowned in the CRM.
 - **Territory planning** — carve balanced books from a ranked, scored universe instead of by gut or geography alone.
@@ -37,7 +37,7 @@ Here's the method, as we've encoded it into a skill that builds this for you.
 
 Firmographics describe a company at rest. The signals that predict deals describe a company in motion.
 
-Same account (Walmart) scored with 2 different approaches.
+Same account ([Walmart](https://sumble.com/orgs/walmart)) scored with 2 different approaches.
 
 **Non-actionable score: 51** — looks precise, but it doesn't tell the rep where to click first:
 
@@ -60,7 +60,7 @@ Same account (Walmart) scored with 2 different approaches.
 | Size | Pinecone | 22 teams |
 | Size | AI Engineer | 208 people |
 | Size | Qwen | 14 teams |
-| Growth & momentum | GenAI projects (last 3mo) | 9 |
+| Growth & momentum | GenAI projects (last 3mo) | 22 |
 | Growth & momentum | AI Engineer | +27% YoY |
 | Growth & momentum | Software Engineer | +2% YoY |
 | Concentration | LangChain | 0.5% of teams |
@@ -73,7 +73,7 @@ Bias towards attributes that reps can understand and take action on. Some exampl
 - **Technology** — how many of their *teams* use competitive and complementary technologies.
 - **Active projects** — relevant migration or transformation work that signals an open buying window.
 
-When Sumble provides these attributes we also offer a **deep link**, so the score component can lead directly to outreach. An attribute that reads "55 teams at Walmart are using Langchain"? (Click through)[https://sumble.com/l/RuS8GoIBbO] to those teams (as well as the key leaders on those teams). "200 AI Engineers at Walmart"? (Click through)[https://sumble.com/l/hjwCfV4t9J] and drop them straight into a sequence. The rep never asks "why an 84?"; they click, get context and named contacts and a reason to reach out.
+When Sumble provides these attributes we also offer a **deep link**, so the score component can lead directly to outreach. An attribute that reads "55 teams at Walmart are using Langchain"? [Click through](https://sumble.com/orgs/walmart/teams?as=%7B%22operator%22%3A%22AND%22%2C%22children%22%3A%5B%7B%22operator%22%3A%22OR%22%2C%22fields%22%3A%7B%22technology%22%3A%7B%22include%22%3A%5B%22langchain%22%5D%7D%7D%2C%22children%22%3A%5B%5D%7D%5D%7D) to those teams (as well as the key leaders on those teams). "200 AI Engineers at Walmart"? [Click through](https://sumble.com/orgs/walmart/people?as=%7B%22operator%22%3A%22AND%22%2C%22children%22%3A%5B%7B%22operator%22%3A%22OR%22%2C%22fields%22%3A%7B%22job_function%22%3A%7B%22include%22%3A%5B%22ai-engineer%22%5D%7D%7D%2C%22children%22%3A%5B%5D%7D%5D%7D) and drop them straight into a sequence. The rep never asks "why an 84?"; they click, get context and named contacts and a reason to reach out.
 
 ## Avoid having your model purely proxy company size
 
