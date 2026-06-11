@@ -55,17 +55,13 @@ Bad:
 
 | Tool | Purpose | Cost |
 |---|---|---|
-| `FindJobs` | Search job postings with org and job filters, including scoping to an organization list. | 2 credits per job |
-| `GetJobDescription` | Fetch the full title and description for one `job_id`. | 1 credit |
-| `FindRelatedPeopleToJob` | Find hiring managers and adjacent team members for a job. | 1 credit per person |
+| `FindMatchAndEnrichJobs` | Find, look up, and enrich job postings in one call. Search with advanced query filters (including org-list scoping) or enrich a list of `job_id`s; request only the attributes needed (the full `description` is a paid attribute). Optional `related_people` returns hiring managers and adjacent team members per job. | 1 credit per job + 1 per paid attribute (title is free) + 1 per related person returned |
 
 ### People
 
 | Tool | Purpose | Cost |
 |---|---|---|
-| `FindPeople` | Search people within a single organization using function, level, location, technology, and timing filters. | 1 credit per person |
-| `FindRelatedPeopleToPerson` | Find nearby people in the same org, tagged `above` or `below`. | 1 credit per person |
-| `EnrichPerson` | Get contact information for a person. At least one of `include_email` or `include_phone` is required. | 10 credits per first email reveal, 80 credits per first phone reveal; free on repeat reveals of the same type or if unavailable |
+| `FindMatchAndEnrichPeople` | Find, match, and enrich people in one call. Resolve person IDs, LinkedIn URLs, or emails, or search within organizations with advanced query filters; request only the attributes needed. Optional `related_people` (inferred managers and direct reports) and `email`/`phone` contact reveals. | 1 credit per person + 1 per paid attribute (name is free) + 1 per related person; 10 credits per first email reveal, 80 credits per first phone reveal, free on repeat reveals of the same type or if unavailable |
 
 ### Organization lists
 
@@ -154,7 +150,7 @@ Trigger: "here's my book, how do I prioritize it"
 1. Call `GetMyCompanyProfile` and hold key tier categories, job functions, and projects in memory.
 2. Call `ListOrganizationLists` and prefer a `group` list. If the user pasted raw names instead, use `FindMatchAndEnrichOrganizations` to resolve them, then `CreateOrganizationList` and `AddOrganizationsToList`.
 3. Call `GetOrganizationList` for the chosen list.
-4. Run one cheap signal pass with `FindJobs` scoped to the list:
+4. Run one cheap signal pass with `FindMatchAndEnrichJobs` scoped to the list:
 
 ```text
 organizations_list EQ '<list_id>'
@@ -169,8 +165,8 @@ AND hiring_period EQ '3mo'
 6. Present ranked evidence and stop before deeper enrich spend. Ask which A-tier accounts to deep-dive.
 
 Budget: roughly 300 credits for a 100-account list. The key cost saver is using
-one `FindJobs` pass and only requesting expensive organization attributes or
-entity metrics after the list is narrowed.
+one `FindMatchAndEnrichJobs` pass with few attributes and only requesting
+expensive organization attributes or entity metrics after the list is narrowed.
 
 ### P2: Live demo, one account end to end
 
@@ -179,12 +175,11 @@ Trigger: demo flow, deep research to outreach in under 3 minutes
 1. `GetMyCompanyProfile`
 2. Get the target account from the user. Prefer domain.
 3. `FindMatchAndEnrichOrganizations` for the target domain with only the key organization attributes and entity metrics needed for the demo.
-4. `FindJobs` for key projects in the last 6 months. Fallback to key job functions in the last 3 months.
-5. `GetJobDescription` for the strongest signal.
+4. `FindMatchAndEnrichJobs` for key projects in the last 6 months. Fallback to key job functions in the last 3 months.
+5. `FindMatchAndEnrichJobs` again with the strongest signal's `job_id`, requesting the `description` attribute and `related_people` for the hiring manager.
 6. Build the account brief inline.
-7. `FindRelatedPeopleToJob` for the top job.
-8. `FindPeople` for VP, Director, Senior Director, and Head roles in key functions.
-9. `EnrichPerson` for only 2-3 priority targets.
+7. `FindMatchAndEnrichPeople` for VP, Director, Senior Director, and Head roles in key functions.
+8. `FindMatchAndEnrichPeople` with the `email` attribute for only 2-3 priority targets.
 10. `CreateContactList` and `AddContactsToList` for everyone you want saved.
 11. Draft two outreach variants:
     A. signal-led, using language from the job description
@@ -200,11 +195,11 @@ Trigger: "got this inbound, help me work it"
 2. `GetMyCompanyProfile`
 3. `FindMatchAndEnrichOrganizations` first to match the account and check fit.
 4. Stop if the account is a weak fit. Do not keep spending credits on a bad lead.
-5. `FindJobs` to identify the why-now initiative.
+5. `FindMatchAndEnrichJobs` to identify the why-now initiative.
 6. Decide whether the MQL is the buyer, a researcher, or a referrer.
-7. If needed, `FindPeople` for the real buyer.
-8. If needed, `FindRelatedPeopleToJob` for the hiring manager around the active initiative.
-9. `EnrichPerson` for at most two people.
+7. If needed, `FindMatchAndEnrichPeople` for the real buyer.
+8. If needed, `FindMatchAndEnrichJobs` with the active initiative's `job_id` and `related_people` for the hiring manager.
+9. `FindMatchAndEnrichPeople` with contact-reveal attributes for at most two people.
 10. Save the relevant people to a contact list.
 11. Draft response and multithread outreach.
 
@@ -225,19 +220,18 @@ Budget: roughly 60-80 credits.
 
 1. `GetMyCompanyProfile`
 2. Start from a known `person_id`
-3. `FindRelatedPeopleToPerson`
-4. Prioritize `above` for buyers and `below` for implementers
-5. `EnrichPerson` for 2-3 people
+3. `FindMatchAndEnrichPeople` with `related_people` for that person
+4. Prioritize `managers` for buyers and `direct_reports` for implementers
+5. `FindMatchAndEnrichPeople` with the `email` attribute for 2-3 people
 6. Save to a contact list
 
 ### Job-signal outreach
 
 1. `GetMyCompanyProfile`
 2. `ListOrganizationLists`
-3. `FindJobs` scoped to a territory list and project slug
-4. `GetJobDescription`
-5. `FindRelatedPeopleToJob`
-6. `EnrichPerson` on only the top few targets
+3. `FindMatchAndEnrichJobs` scoped to a territory list and project slug
+4. `FindMatchAndEnrichJobs` for the top job's `job_id` with the `description` attribute and `related_people`
+5. `FindMatchAndEnrichPeople` with contact-reveal attributes on only the top few targets
 
 ### External list import
 
@@ -251,8 +245,8 @@ Budget: roughly 60-80 credits.
 
 1. `GetMyCompanyProfile`
 2. `FindMatchAndEnrichOrganizations`
-3. `FindPeople`
-4. `FindJobs`
+3. `FindMatchAndEnrichPeople`
+4. `FindMatchAndEnrichJobs`
 5. Save targets to a contact list
 
 ## Cost management
@@ -260,7 +254,7 @@ Budget: roughly 60-80 credits.
 - Free tools can be used liberally.
 - Tighten organization filters before `FindMatchAndEnrichOrganizations`, then request only needed paid attributes and entity metrics.
 - `GetIntelligenceBrief` is 50 credits per completed brief. Use it after narrowing to a high-priority account.
-- `EnrichPerson` phone reveals are expensive. Prefer email-only when email is enough; keep contact reveals to the top 2-3 targets.
+- Phone reveals in `FindMatchAndEnrichPeople` are expensive (80 credits). Prefer email-only when email is enough; keep contact reveals to the top 2-3 targets.
 - `RunSqlQuery` bills by response size. Always use `LIMIT` and select only the columns you need.
 - On a 402 response, direct the user to purchase more credits.
 - Always surface URLs returned by the tools.

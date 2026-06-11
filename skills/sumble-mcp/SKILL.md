@@ -30,9 +30,10 @@ planning/demoing account-research motions built on its tools.
 - Use `FindMatchAndEnrichOrganizations` for organization search, matching, and
   enrichment. Request only the attributes and entity metrics needed for the
   task, because matched orgs, paid attributes, and per-entity metrics all bill.
-- Treat `GetIntelligenceBrief` and `EnrichPerson` as high-cost tools. Use them
-  only for selected accounts or top 2-3 people unless the user explicitly wants
-  broader spend.
+- Treat `GetIntelligenceBrief` and contact reveals (`email`/`phone` attributes
+  in `FindMatchAndEnrichPeople`) as high-cost operations. Use them only for
+  selected accounts or top 2-3 people unless the user explicitly wants broader
+  spend.
 - When the user says "my accounts" or "my territory", prefer organization lists
   with `type = group`.
 - Always surface URLs returned by the tools.
