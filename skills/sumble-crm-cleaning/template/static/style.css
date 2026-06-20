@@ -235,6 +235,30 @@ main { padding: 4px 22px 60px; max-width: 1100px; }
   font-weight: 500;
 }
 
+/* duplicate resolution-bucket badges: hardest (multi-owner) → easiest */
+.badge.cat.cat-multi_owner { background: var(--danger-soft); color: var(--danger); }
+.badge.cat.cat-split_activity { background: var(--warn-soft); color: var(--warn); }
+.badge.cat.cat-concentrated { background: var(--accent-soft); color: var(--accent); }
+
+/* category filter chips carry a per-bucket cluster count */
+.chip-count {
+  margin-left: 6px;
+  font-size: 11px;
+  opacity: 0.7;
+}
+.cat-chip.cat-multi_owner.active {
+  background: var(--danger);
+  border-color: var(--danger);
+}
+.cat-chip.cat-split_activity.active {
+  background: var(--warn);
+  border-color: var(--warn);
+}
+.cat-chip.cat-concentrated.active {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
 .sumble-match {
   font-size: 13px;
   color: var(--fg-dim);

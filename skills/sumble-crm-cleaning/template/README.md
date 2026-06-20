@@ -30,6 +30,15 @@ No pip install, no venv — stdlib only, Python 3.10+. Custom port:
   is available (the suggested primary is hinted: owned > customer > biggest
   CRM footprint > most complete > oldest). **Not a duplicate** dismisses a
   false match. Every click saves to `decisions.json` immediately.
+- Each duplicate cluster carries a **resolution bucket** (badge on the card +
+  filter chips on the Duplicates tab), ordered hardest first:
+  - **Multiple owners** — two or more reps own records in the cluster; decide
+    who keeps the account before merging (the hard case).
+  - **Split activity** — one owner, but CRM history (contacts/opps/activities)
+    sits on more than one record; merge into the primary so none is lost.
+  - **Concentrated** — one owner with history on a single record; keep it and
+    drop the empty shells (the easy case).
+  Work the easy buckets first and reserve the owner conflicts for last.
 - **Export actions.csv** writes one row per CRM change implied by your
   accepted findings:
   - `merge` — fold `account_id` into `target_account_id`

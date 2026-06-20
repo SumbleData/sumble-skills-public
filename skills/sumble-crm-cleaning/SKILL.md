@@ -11,7 +11,13 @@ user adjudicate each one:
 
 1. **Potential duplicate accounts** — CRM accounts that resolve to the SAME
    Sumble organization. Sumble's matcher is the only duplicate evidence — no
-   domain or name-similarity matching.
+   domain or name-similarity matching. Each duplicate cluster is tagged with a
+   resolution bucket so the reviewer can triage hard cases from easy ones:
+   **Multiple owners** (≥2 distinct owners — decide who keeps the account),
+   **Split activity** (one owner, CRM footprint spread across >1 record — merge
+   so no history is lost), or **Concentrated** (one owner, footprint on a single
+   record — keep it, drop the shells). The Duplicates tab gets a filter chip per
+   bucket and a badge on every card.
 2. **Missing parent/subsidiary links** — accounts whose Sumble parent (or
    grandparent) is *another account in the CRM* but no CRM parent link exists
    (or the CRM's link conflicts with Sumble's hierarchy); plus parent
@@ -176,7 +182,9 @@ the details.
      account's CRM footprint (how many contacts, opportunities, and logged
      activities hang off each record). Shown on every duplicate card and used
      to pick the survivor: when two records are the same company, the one
-     carrying the relationship history is almost always the keeper. Cheap to
+     carrying the relationship history is almost always the keeper. They also
+     split the **Split activity** vs **Concentrated** duplicate buckets —
+     without them every single-owner cluster falls into Concentrated. Cheap to
      pull (one aggregate query per object in Salesforce/HubSpot) and the
      single best primary-record signal — read at analyze time, so they can be
      added later without re-fetching.
@@ -292,7 +300,11 @@ Explain the review loop in two sentences: hierarchy and parents-not-in-CRM
 findings get accept/reject/skip, while a duplicate cluster is resolved by its
 per-record actions — mark one record **Primary** (the survivor) and the others
 default to **Merge**, switch any to **Delete**, or hit **Not a duplicate** to
-dismiss a false match (decisions save instantly to `decisions.json`). Then
+dismiss a false match (decisions save instantly to `decisions.json`). Point out
+the Duplicates tab's resolution-bucket filter chips — **Multiple owners** (hard:
+two reps claim the account), **Split activity** (merge to preserve history), and
+**Concentrated** (easy: keep the populated record) — so the reviewer can work
+the easy buckets first and reserve the owner conflicts for a judgment call. Then
 **Export actions.csv** to get the change list — `merge` / `delete` /
 `set_parent` / `create_parent_and_link` rows keyed by CRM account id, ready
 for the CRM admin, a Data Loader job, or a follow-up agent run. Mention the

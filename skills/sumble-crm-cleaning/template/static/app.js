@@ -10,8 +10,18 @@ const state = {
   tab: "duplicates",
   confidence: new Set(), // empty = all
   status: new Set(), // empty = all; values: undecided|accept|reject|skip
+  category: new Set(), // empty = all; duplicate-cluster resolution buckets
   search: "",
 };
+
+// Duplicate-cluster resolution buckets (set by analyze.py). Ordered hardest →
+// easiest, matching the default finding order.
+const CATEGORIES = [
+  ["multi_owner", "Multiple owners"],
+  ["split_activity", "Split activity"],
+  ["concentrated", "Concentrated"],
+];
+const CATEGORY_LABEL = Object.fromEntries(CATEGORIES);
 
 const $ = (sel) => document.querySelector(sel);
 const esc = (s) =>
@@ -137,6 +147,27 @@ function renderChips() {
   $("#status-chips").innerHTML = stat
     .map((s) => `<button class="chip" data-status="${s}">${s}</button>`)
     .join("");
+  renderCategoryChips();
+}
+
+/* Resolution-bucket chips for the Duplicates tab only — hidden on every other
+   tab. Each chip carries its cluster count; buckets with zero clusters are
+   dropped so the row only shows what actually occurs. */
+function renderCategoryChips() {
+  const box = $("#category-chips");
+  const counts = state.findings.meta.duplicate_categories || {};
+  if (state.tab !== "duplicates") {
+    box.innerHTML = "";
+    return;
+  }
+  box.innerHTML = CATEGORIES.filter(([key]) => counts[key])
+    .map(
+      ([key, label]) =>
+        `<button class="chip cat-chip cat-${key}` +
+        `${state.category.has(key) ? " active" : ""}" data-cat="${key}">` +
+        `${label}<span class="chip-count">${counts[key]}</span></button>`
+    )
+    .join("");
 }
 
 function bindToolbar() {
@@ -146,9 +177,17 @@ function bindToolbar() {
       document
         .querySelectorAll(".tab")
         .forEach((b) => b.classList.toggle("active", b === btn));
+      renderCategoryChips();
       render();
     })
   );
+  $("#category-chips").addEventListener("click", (e) => {
+    const c = e.target.closest(".cat-chip")?.dataset?.cat;
+    if (!c) return;
+    state.category.has(c) ? state.category.delete(c) : state.category.add(c);
+    renderCategoryChips();
+    render();
+  });
   $("#confidence-chips").addEventListener("click", (e) => {
     const c = e.target.dataset?.conf;
     if (!c) return;
@@ -175,6 +214,12 @@ function bindToolbar() {
 function render() {
   const items = tabItems(state.tab).filter((item) => {
     if (state.confidence.size && !state.confidence.has(item.confidence)) return false;
+    if (
+      state.tab === "duplicates" &&
+      state.category.size &&
+      !state.category.has(item.category)
+    )
+      return false;
     if (!item.unmatched && state.status.size && !state.status.has(decisionOf(item.id)))
       return false;
     if (state.search && !findingText(item).includes(state.search)) return false;
@@ -319,6 +364,10 @@ function renderFinding(item) {
     (item.confidence === "info"
       ? ""
       : `<span class="badge ${item.confidence}">${item.confidence}</span>`) +
+    (item.category
+      ? `<span class="badge cat cat-${item.category}">` +
+        `${esc(CATEGORY_LABEL[item.category] || item.category)}</span>`
+      : "") +
     `<span class="finding-title">${titleOf(item)}</span>` +
     (item.evidence || [])
       .map((e) => `<span class="badge evidence">${esc(e)}</span>`)
@@ -397,7 +446,27 @@ function dupBody(item) {
     `<table class="acct-table"><tr><th title="What to do with each record">` +
     `Action</th>` +
     acctHead().slice(4) + rows + `</table>` +
-    `<div class="dim chain">${help}</div>`
+    `<div class="dim chain">${dupCategoryHint(item)} ${help}</div>`
+  );
+}
+
+/* One-line triage hint per resolution bucket, shown above the record actions. */
+function dupCategoryHint(item) {
+  if (item.category === "multi_owner") {
+    const owners = (item.owners || []).join(", ");
+    return (
+      `<b>Multiple owners</b>${owners ? ` (${esc(owners)})` : ""} — decide who ` +
+      `keeps the account before merging.`
+    );
+  }
+  if (item.category === "split_activity")
+    return (
+      `<b>Split activity</b> — CRM history sits on more than one record; merge ` +
+      `into the primary so none is lost.`
+    );
+  return (
+    `<b>Concentrated</b> — history sits on one record; keep it and drop the ` +
+    `empty shells.`
   );
 }
 

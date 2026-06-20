@@ -1,6 +1,6 @@
 ---
 name: sumble-account-research
-description: "Guide a seller through researching and prospecting accounts on the Sumble MCP. Asks up front whether they're working a specific account or brainstorming which to focus on, and which deliverable they want — outreach sequences, an account plan (SDR-to-AE handoff, AE-to-manager, or QBR prep), or a presentation deck; for a plan or deck, also asks the format/medium and an example to match. For brainstorm, ranks their Sumble territory/org list by fit + why each is compelling. Builds a cached Sumble profile from GetMyCompanyProfile plus sales plays / persona profiles they provide (Seismic, Saleshood, or pasted). Then researches one account at a time — internal context (Gong/Fireflies/Granola/CRM/marketing), the rebuilt Sumble overview (tech, teams, people, headcount, hiring signals, ICP fit), and recommended teams + people for first land or expansion — and produces the chosen deliverable (sequences pushed to a sequencer; plan or deck in the requested format)."
+description: "Guide a seller through researching and prospecting accounts on the Sumble MCP. Asks up front whether they're working a specific account or brainstorming which to focus on, and which deliverable they want — outreach sequences, an account plan (your own prep to formulate a strategy, an SDR-to-AE handoff, AE-to-manager, or QBR prep), or a presentation deck; for a plan or deck, also asks the format/medium and an example to match. For brainstorm, ranks their Sumble territory/org list by fit + why each is compelling. Builds a cached Sumble profile from GetMyCompanyProfile plus sales plays / persona profiles they provide (Seismic, Saleshood, or pasted). Then researches one account at a time — internal context (Gong/Fireflies/Granola/CRM/marketing), the rebuilt Sumble overview (tech, teams, people, headcount, hiring signals, ICP fit), and recommended teams + people for first land or expansion — and produces the chosen deliverable (sequences pushed to a sequencer; plan or deck in the requested format)."
 ---
 
 # Account Research & Prospecting
@@ -21,8 +21,10 @@ so the whole skill isn't loaded at once:
 - `references/mcp-tools.md` — MCP tool names, costs, query DSL, guardrails (Steps 4–5).
 - `references/overview-rebuild.md` — rebuilding the overview page card by card (Step 5b).
 - `references/companion-profile.md` — the durable companion profile-skill cache (Step 3).
-- `references/branding.md` — Sumble brand styling for a plan / deck when no example is
-  supplied (Step 5d); the Sumble logo ships in `assets/`.
+- `references/branding.md` — how to brand a plan / deck (in the seller's own company
+  branding) when no example is supplied (Step 5d). If a "powered by Sumble" mark is
+  added, it follows the official guide — defer to the `sumble-brand-guidelines` skill
+  if installed; the official Sumble logo ships in `assets/sumble-eyes-logo-512.png`.
 
 If the Sumble MCP isn't available here, say so and produce the plan instead of
 pretending to run.
@@ -52,17 +54,19 @@ After the intro, ask two things and wait:
 
 2. **Desired output — what do you want to walk away with?**
    > - **Outreach sequences** — multi-touch, ready to send
-   > - **An account plan** — e.g. an SDR's handoff to their AE, an AE's write-up for a
-   >   manager, or QBR prep
+   > - **An account plan** — e.g. your own prep to formulate a strategy, an SDR's
+   >   handoff to their AE, an AE's write-up for a manager, or QBR prep
    > - **A presentation deck** — to present to that company
 
-   If they pick an **account plan** or a **deck**, also ask two follow-ups:
+   If they pick an **account plan** or a **deck**, also ask two follow-ups (for **your
+   own prep to formulate a strategy**, keep these light — there's no team convention to
+   match, so default to a clean working doc unless they say otherwise):
    - **Format / medium** they want it delivered in (Google Doc, Slides, Notion, PDF,
      a CRM field, Markdown, …), and
    - whether they have an **example** to match — paste it or point you at one, so the
      structure, length, and tone match what their team already expects. **If they have
-     no example, say you'll style it with Sumble's own branding
-     (`references/branding.md`)** — they don't need to supply anything.
+     no example, say you'll style it in their own company's branding** — and ask if they
+     have a deck template / brand colors / logo to match (`references/branding.md`).
 
 Hold the chosen output — the research (Steps 2–5c) is the same regardless; it only
 changes the deliverable you produce in Step 5d.
@@ -171,19 +175,20 @@ the matching sales play / reference customer:
   reference-led, value-led). First touch leans on internal context; later touches on
   specific external signals. Human and specific; no "I noticed you're hiring" filler.
 - **Account plan:** a written plan in the **format from Step 1**, pitched to
-  the stated audience (SDR→AE handoff, AE→manager, or QBR). Cover: account snapshot +
+  the stated audience (your own strategy prep, SDR→AE handoff, AE→manager, or QBR). Cover: account snapshot +
   ICP fit, why now (signals), target team(s) + entry point, the buying group (buyer /
   champion / multithread) with the org map, current state (pipeline / existing
   business), and recommended next steps. **If they gave an example, match its structure,
-  length, and tone.** If they didn't, structure it cleanly and apply **Sumble brand
-  styling (`references/branding.md`)** — colors, type, wordmark.
+  length, and tone.** If they didn't, structure it cleanly in **the seller's own company
+  branding (`references/branding.md`)** — their colors, type, logo.
 - **Deck:** a slide outline first, then full slide content, in the **format/medium from
   Step 1**. Typical arc: who they are + why now → what we see in their
   stack / teams / hiring → the problem we solve for the target team → proof (reference
   customer) → a clear next step. Only slides that earn their place. **If they gave an
-  example, match its template, layout, and tone.** If they didn't, design it on
-  **Sumble brand styling (`references/branding.md`)** — palette, type, the wordmark on
-  the title / closing slide.
+  example, match its template, layout, and tone.** If they didn't, design it in **the
+  seller's own company branding (`references/branding.md`)** — their palette, type, and
+  logo on the title / closing slide (it's presented to the prospect under the seller's
+  name, not Sumble's).
 
 **5e. Activate / deliver.** *Outreach:* reveal **email** for the top 2–3 (`email` =
 10 cr); reserve **phone** (80 cr) for the single most important and confirm first

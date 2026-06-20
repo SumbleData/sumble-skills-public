@@ -93,6 +93,27 @@ Survivor suggestion order: has owner > is customer > biggest CRM footprint
 (`contact_count + opportunity_count + activity_count`) > most non-empty
 fields > oldest `created_date` > lowest id.
 
+### Duplicate resolution buckets (`category`)
+
+Every duplicate cluster is tagged with a `category` (in `findings.json`, the
+`dup_category` column of `findings.csv`, and per-bucket counts in
+`meta.duplicate_categories`) so the reviewer can triage hard conflicts away
+from trivial shell-merges. `categorize_cluster` (in `analyze.py`):
+
+| category | rule | difficulty |
+|---|---|---|
+| `multi_owner` | ≥2 distinct (non-empty) `owner` values in the cluster | hard — decide who keeps the account before merging |
+| `split_activity` | one owner (or none) **and** CRM footprint on >1 record | easy-ish — merge so no relationship history is lost |
+| `concentrated` | one owner (or none) **and** footprint on ≤1 record | easy — keep the populated record, drop the shells |
+
+Owner matching is case-insensitive; empty owners are ignored. Footprint per
+record = `contact_count + opportunity_count + activity_count`. Priority:
+`multi_owner` wins over the activity split. **Without the `*_count` columns,
+footprint is 0 everywhere, so single-owner clusters all fall to
+`concentrated`** — pull the count columns to separate `split_activity`.
+Findings are ordered hardest bucket first (`multi_owner` → `split_activity`
+→ `concentrated`), then by cluster size, then by first CRM id.
+
 ## Parent/subsidiary findings
 
 For each matched account, walk its Sumble `parent_id` chain (nearest first):

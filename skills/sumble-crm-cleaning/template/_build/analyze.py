@@ -14,6 +14,13 @@ Sumble's matcher (`POST /v6/organizations`) is the sole duplicate signal —
 no domain or name-similarity matching. Pairs already linked parent↔child
 inside the CRM are never duplicate evidence (they're hierarchy, not dupes).
 
+Each duplicate cluster is also tagged with a resolution-difficulty `category`
+(see `categorize_cluster`), so the reviewer can triage:
+  multi_owner     ≥2 distinct owners — decide who keeps the account (hard)
+  split_activity  one owner, CRM footprint spread over >1 record — merge so no
+                  history is lost (easy-ish)
+  concentrated    one owner, footprint on ≤1 record — keep it, drop shells (easy)
+
 Parent/subsidiary findings (walking each account's Sumble ancestor chain):
   missing_parent_link  the nearest ancestor that IS a CRM account, but the
                        CRM has no parent set on the child  → high (direct
@@ -49,6 +56,12 @@ LEGAL_SUFFIXES = {
 }
 
 CONFIDENCE_ORDER = {"high": 0, "medium": 1, "low": 2, "info": 3}
+
+# Duplicate clusters are bucketed by how hard they are to resolve, so the
+# reviewer can triage the hard ownership conflicts away from the trivial
+# shell-merges. Ordered hardest → easiest (drives the default display order).
+DUP_CATEGORIES = ("multi_owner", "split_activity", "concentrated")
+CATEGORY_ORDER = {c: i for i, c in enumerate(DUP_CATEGORIES)}
 
 
 def norm_domain(raw: str) -> str:
@@ -284,10 +297,14 @@ def find_duplicates(rows: list[dict]) -> list[dict]:
                 "Same Sumble org but dissimilar CRM names — verify this isn't a "
                 "parent/subsidiary pair both matching the parent org."
             )
+        category, owners, footprint_records = categorize_cluster(member_rows)
         findings.append(
             {
                 "confidence": "high",
                 "evidence": ["same_sumble_org"],
+                "category": category,
+                "owners": owners,
+                "footprint_records": footprint_records,
                 "suggested_survivor_crm_id": pick_survivor(member_rows),
                 "accounts": [account_payload(r) for r in member_rows],
                 "note": note,
@@ -295,6 +312,7 @@ def find_duplicates(rows: list[dict]) -> list[dict]:
         )
     findings.sort(
         key=lambda f: (
+            CATEGORY_ORDER[f["category"]],
             -len(f["accounts"]),
             f["accounts"][0]["crm_account_id"],
         )
@@ -302,6 +320,42 @@ def find_duplicates(rows: list[dict]) -> list[dict]:
     for i, f in enumerate(findings):
         f["id"] = f"dup_{i + 1:04d}"
     return findings
+
+
+def categorize_cluster(member_rows: list[dict]) -> tuple[str, list[str], int]:
+    """Bucket a duplicate cluster by resolution difficulty.
+
+    multi_owner     ≥2 distinct (non-empty) owners across the cluster — the
+                    records belong to different reps, so someone has to give up
+                    the account before it can be merged (hard).
+    split_activity  one owner (or none), but CRM footprint
+                    (contacts + opportunities + activities) sits on >1 record —
+                    merge so no relationship history is lost (easy-ish).
+    concentrated    one owner (or none) with footprint on ≤1 record — keep the
+                    populated record and drop the empty shells (easy). Also the
+                    bucket when no `*_count` columns were provided, since spread
+                    can't be detected without them.
+
+    Priority: multi_owner wins over the activity split — an ownership conflict
+    is the dominant concern regardless of how the footprint is distributed.
+    Returns (category, sorted distinct owners, count of records with footprint).
+    """
+    owners_by_key: dict[str, str] = {}
+    for r in member_rows:
+        o = (r.get("owner") or "").strip()
+        if o:
+            owners_by_key.setdefault(o.lower(), o)
+    owners = [owners_by_key[k] for k in sorted(owners_by_key)]
+    footprint_records = sum(
+        1 for r in member_rows if sum(r.get(c) or 0 for c in COUNT_FIELDS) > 0
+    )
+    if len(owners) >= 2:
+        category = "multi_owner"
+    elif footprint_records > 1:
+        category = "split_activity"
+    else:
+        category = "concentrated"
+    return category, owners, footprint_records
 
 
 def pick_survivor(member_rows: list[dict]) -> str:
@@ -495,7 +549,8 @@ def find_parent_sub(
 
 def write_findings_csv(out_path: Path, findings: dict) -> None:
     cols = [
-        "finding_id", "finding_type", "confidence", "evidence", "role",
+        "finding_id", "finding_type", "confidence", "dup_category", "evidence",
+        "role",
         "crm_account_id", "crm_url", "crm_name", "crm_domain", "owner",
         "is_customer", "created_date", *COUNT_FIELDS, *META_FIELDS,
         "org_id", "sumble_name",
@@ -507,12 +562,13 @@ def write_findings_csv(out_path: Path, findings: dict) -> None:
         w = csv.DictWriter(f, fieldnames=cols)
         w.writeheader()
 
-        def emit(fid, ftype, conf, evidence, role, acct, note=""):
+        def emit(fid, ftype, conf, evidence, role, acct, note="", dup_category=""):
             w.writerow(
                 {
                     "finding_id": fid,
                     "finding_type": ftype,
                     "confidence": conf,
+                    "dup_category": dup_category,
                     "evidence": "|".join(evidence),
                     "role": role,
                     "note": note,
@@ -532,7 +588,7 @@ def write_findings_csv(out_path: Path, findings: dict) -> None:
                     else "merge_into_survivor"
                 )
                 emit(d["id"], "duplicate", d["confidence"], d["evidence"], role, a,
-                     d["note"])
+                     d["note"], d["category"])
         for p in findings["parent_sub"]:
             emit(p["id"], p["type"], p["confidence"], [], "child", p["child"],
                  p["note"])
@@ -617,6 +673,10 @@ def main() -> None:
             "accounts_unmatched": len(unmatched),
             "duplicate_clusters": len(duplicates),
             "duplicate_accounts": sum(len(d["accounts"]) for d in duplicates),
+            "duplicate_categories": {
+                c: sum(1 for d in duplicates if d["category"] == c)
+                for c in DUP_CATEGORIES
+            },
             "parent_sub_findings": len(parent_sub),
             "parents_not_in_crm": len(parent_not_in_crm),
         },
