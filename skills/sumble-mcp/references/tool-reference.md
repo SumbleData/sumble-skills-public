@@ -43,6 +43,8 @@ Bad:
 |---|---|
 | `GetMyCompanyProfile` | Pull ICP, competitive landscape, key personas, and project signals. Usually call first. |
 | `GetAccountInformation` | Check API key validity, credits, and plan information. |
+| `ReportDataQualityIssue` | Report incorrect, missing, or stale Sumble data. Routed to the Sumble data team. |
+| `SubmitSupportRequest` | Submit a general account, billing, or product support request. Routed to the Sumble support team. |
 
 ### Organization search and enrichment
 
