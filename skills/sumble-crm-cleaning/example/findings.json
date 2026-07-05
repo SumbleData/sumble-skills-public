@@ -13,7 +13,15 @@
     "duplicate_clusters": 12,
     "duplicate_accounts": 24,
     "parent_sub_findings": 17,
-    "parents_not_in_crm": 27
+    "parents_not_in_crm": 26,
+    "include_pe_parents": true,
+    "duplicate_categories": {
+      "multi_owner": 6,
+      "split_activity": 4,
+      "concentrated": 2
+    },
+    "pe_parents": 7,
+    "pe_parents_excluded": 0
   },
   "duplicates": [
     {
@@ -53,7 +61,7 @@
           "crm_account_id": "001RP00000qZqCHYA0",
           "crm_url": "https://sumble.lightning.force.com/lightning/r/Account/001RP00000qZqCHYA0/view",
           "crm_name": "Astronomer",
-          "crm_domain": "linkedin.com",
+          "crm_domain": "linkedin.com/company/astronomer",
           "parent_crm_id": "",
           "owner": "Jordan Lee",
           "is_customer": true,
@@ -77,7 +85,13 @@
         }
       ],
       "note": "",
-      "id": "dup_0001"
+      "id": "dup_0001",
+      "category": "multi_owner",
+      "owners": [
+        "Alex Rivera",
+        "Jordan Lee"
+      ],
+      "footprint_records": 1
     },
     {
       "confidence": "high",
@@ -116,7 +130,7 @@
           "crm_account_id": "001RP00000qa2bdYAA",
           "crm_url": "https://sumble.lightning.force.com/lightning/r/Account/001RP00000qa2bdYAA/view",
           "crm_name": "Tanium",
-          "crm_domain": "linkedin.com",
+          "crm_domain": "linkedin.com/company/tanium",
           "parent_crm_id": "",
           "owner": "Jordan Lee",
           "is_customer": false,
@@ -140,7 +154,319 @@
         }
       ],
       "note": "",
-      "id": "dup_0002"
+      "id": "dup_0002",
+      "category": "multi_owner",
+      "owners": [
+        "Alex Rivera",
+        "Jordan Lee"
+      ],
+      "footprint_records": 2
+    },
+    {
+      "confidence": "high",
+      "evidence": [
+        "same_sumble_org"
+      ],
+      "suggested_survivor_crm_id": "001RP00000RbNL6YAN",
+      "accounts": [
+        {
+          "crm_account_id": "001RP00000RbNL6YAN",
+          "crm_url": "https://sumble.lightning.force.com/lightning/r/Account/001RP00000RbNL6YAN/view",
+          "crm_name": "Varonis",
+          "crm_domain": "varonis.com",
+          "parent_crm_id": "",
+          "owner": "Sam Patel",
+          "is_customer": false,
+          "created_date": "2025-03-07T16:29:11.000+0000",
+          "contact_count": 12,
+          "opportunity_count": 0,
+          "activity_count": 6,
+          "org_id": 448707,
+          "sumble_name": "Varonis",
+          "sumble_domain": "varonis.com",
+          "sumble_url": "https://sumble.com/l/org/RvBUzMXybNg",
+          "sumble_name_alternates": [
+            "Varonis Systems"
+          ],
+          "sumble_url_alternates": [
+            "polyrize.com"
+          ],
+          "employee_count_int": 2679,
+          "headquarters_country": "US",
+          "crm_city": "",
+          "crm_state": "",
+          "crm_country": "",
+          "crm_linkedin_url": "",
+          "crm_last_modified": ""
+        },
+        {
+          "crm_account_id": "001RP00000j1I5wYAE",
+          "crm_url": "https://sumble.lightning.force.com/lightning/r/Account/001RP00000j1I5wYAE/view",
+          "crm_name": "Varonis Systems",
+          "crm_domain": "varonis.com",
+          "parent_crm_id": "",
+          "owner": "Jordan Lee",
+          "is_customer": false,
+          "created_date": "2026-01-07T05:01:21.000+0000",
+          "contact_count": 0,
+          "opportunity_count": 0,
+          "activity_count": 0,
+          "org_id": 448707,
+          "sumble_name": "Varonis",
+          "sumble_domain": "varonis.com",
+          "sumble_url": "https://sumble.com/l/org/RvBUzMXybNg",
+          "sumble_name_alternates": [
+            "Varonis Systems"
+          ],
+          "sumble_url_alternates": [
+            "polyrize.com"
+          ],
+          "employee_count_int": 2679,
+          "headquarters_country": "US",
+          "crm_city": "",
+          "crm_state": "",
+          "crm_country": "",
+          "crm_linkedin_url": "",
+          "crm_last_modified": ""
+        }
+      ],
+      "note": "",
+      "id": "dup_0003",
+      "category": "multi_owner",
+      "owners": [
+        "Jordan Lee",
+        "Sam Patel"
+      ],
+      "footprint_records": 1
+    },
+    {
+      "confidence": "high",
+      "evidence": [
+        "same_sumble_org"
+      ],
+      "suggested_survivor_crm_id": "001RP00000SZ0wXYAT",
+      "accounts": [
+        {
+          "crm_account_id": "001RP00000SZ0wXYAT",
+          "crm_url": "https://sumble.lightning.force.com/lightning/r/Account/001RP00000SZ0wXYAT/view",
+          "crm_name": "checkpoint",
+          "crm_domain": "checkpoint.com",
+          "parent_crm_id": "",
+          "owner": "Alex Rivera",
+          "is_customer": false,
+          "created_date": "2025-03-26T18:50:37.000+0000",
+          "contact_count": 0,
+          "opportunity_count": 0,
+          "activity_count": 0,
+          "org_id": 6763,
+          "sumble_name": "Check Point Software",
+          "sumble_domain": "checkpoint.com",
+          "sumble_url": "https://sumble.com/l/org/EO37f79rxQ",
+          "sumble_name_alternates": [
+            "Check Point Software Technologies"
+          ],
+          "sumble_url_alternates": [],
+          "employee_count_int": 7163,
+          "headquarters_country": "RO",
+          "crm_city": "",
+          "crm_state": "",
+          "crm_country": "",
+          "crm_linkedin_url": "",
+          "crm_last_modified": ""
+        },
+        {
+          "crm_account_id": "001RP00000j1I5pYAE",
+          "crm_url": "https://sumble.lightning.force.com/lightning/r/Account/001RP00000j1I5pYAE/view",
+          "crm_name": "Check Point Software Technologies",
+          "crm_domain": "checkpoint.com",
+          "parent_crm_id": "",
+          "owner": "Jordan Lee",
+          "is_customer": true,
+          "created_date": "2026-01-07T05:01:21.000+0000",
+          "contact_count": 0,
+          "opportunity_count": 0,
+          "activity_count": 0,
+          "org_id": 6763,
+          "sumble_name": "Check Point Software",
+          "sumble_domain": "checkpoint.com",
+          "sumble_url": "https://sumble.com/l/org/EO37f79rxQ",
+          "sumble_name_alternates": [
+            "Check Point Software Technologies"
+          ],
+          "sumble_url_alternates": [],
+          "employee_count_int": 7163,
+          "headquarters_country": "RO",
+          "crm_city": "",
+          "crm_state": "",
+          "crm_country": "",
+          "crm_linkedin_url": "",
+          "crm_last_modified": ""
+        }
+      ],
+      "note": "",
+      "id": "dup_0004",
+      "category": "multi_owner",
+      "owners": [
+        "Alex Rivera",
+        "Jordan Lee"
+      ],
+      "footprint_records": 0
+    },
+    {
+      "confidence": "high",
+      "evidence": [
+        "same_sumble_org"
+      ],
+      "suggested_survivor_crm_id": "001RP00000i4Ky7YAE",
+      "accounts": [
+        {
+          "crm_account_id": "001RP00000SoVGhYAN",
+          "crm_url": "https://sumble.lightning.force.com/lightning/r/Account/001RP00000SoVGhYAN/view",
+          "crm_name": "cdata.com",
+          "crm_domain": "cdata.com",
+          "parent_crm_id": "",
+          "owner": "Jordan Lee",
+          "is_customer": false,
+          "created_date": "2025-03-31T21:57:31.000+0000",
+          "contact_count": 0,
+          "opportunity_count": 0,
+          "activity_count": 0,
+          "org_id": 28192,
+          "sumble_name": "CData Software",
+          "sumble_domain": "cdata.com",
+          "sumble_url": "https://sumble.com/l/org/UAeWKwND2O",
+          "sumble_name_alternates": [
+            "CDATA SOFTWARE",
+            "CData Virtuality"
+          ],
+          "sumble_url_alternates": [
+            "arcesb.com",
+            "arc.cdata.com"
+          ],
+          "employee_count_int": 469,
+          "headquarters_country": "US",
+          "crm_city": "",
+          "crm_state": "",
+          "crm_country": "",
+          "crm_linkedin_url": "",
+          "crm_last_modified": ""
+        },
+        {
+          "crm_account_id": "001RP00000i4Ky7YAE",
+          "crm_url": "https://sumble.lightning.force.com/lightning/r/Account/001RP00000i4Ky7YAE/view",
+          "crm_name": "CData Software",
+          "crm_domain": "cdata.com",
+          "parent_crm_id": "",
+          "owner": "Sam Patel",
+          "is_customer": false,
+          "created_date": "2025-12-17T23:11:37.000+0000",
+          "contact_count": 1,
+          "opportunity_count": 0,
+          "activity_count": 0,
+          "org_id": 28192,
+          "sumble_name": "CData Software",
+          "sumble_domain": "cdata.com",
+          "sumble_url": "https://sumble.com/l/org/UAeWKwND2O",
+          "sumble_name_alternates": [
+            "CDATA SOFTWARE",
+            "CData Virtuality"
+          ],
+          "sumble_url_alternates": [
+            "arcesb.com",
+            "arc.cdata.com"
+          ],
+          "employee_count_int": 469,
+          "headquarters_country": "US",
+          "crm_city": "",
+          "crm_state": "",
+          "crm_country": "",
+          "crm_linkedin_url": "",
+          "crm_last_modified": ""
+        }
+      ],
+      "note": "",
+      "id": "dup_0005",
+      "category": "multi_owner",
+      "owners": [
+        "Jordan Lee",
+        "Sam Patel"
+      ],
+      "footprint_records": 1
+    },
+    {
+      "confidence": "high",
+      "evidence": [
+        "same_sumble_org"
+      ],
+      "suggested_survivor_crm_id": "001RP00000Th3DHYAZ",
+      "accounts": [
+        {
+          "crm_account_id": "001RP00000Th3DHYAZ",
+          "crm_url": "https://sumble.lightning.force.com/lightning/r/Account/001RP00000Th3DHYAZ/view",
+          "crm_name": "Comet",
+          "crm_domain": "comet.com",
+          "parent_crm_id": "",
+          "owner": "Jordan Lee",
+          "is_customer": false,
+          "created_date": "2025-04-18T02:18:30.000+0000",
+          "contact_count": 1,
+          "opportunity_count": 0,
+          "activity_count": 0,
+          "org_id": 84765,
+          "sumble_name": "GRUPO COMET (SIKAR FF.VV.)",
+          "sumble_domain": "comet.com",
+          "sumble_url": "https://sumble.com/l/org/yrGeUM8ANz",
+          "sumble_name_alternates": [
+            "Comet",
+            "Comet.ml"
+          ],
+          "sumble_url_alternates": [],
+          "employee_count_int": 82,
+          "headquarters_country": "",
+          "crm_city": "",
+          "crm_state": "",
+          "crm_country": "",
+          "crm_linkedin_url": "",
+          "crm_last_modified": ""
+        },
+        {
+          "crm_account_id": "001RP00000Ug4ccYAB",
+          "crm_url": "https://sumble.lightning.force.com/lightning/r/Account/001RP00000Ug4ccYAB/view",
+          "crm_name": "Comet.ml",
+          "crm_domain": "comet.com",
+          "parent_crm_id": "",
+          "owner": "Sam Patel",
+          "is_customer": true,
+          "created_date": "2025-05-08T17:28:31.000+0000",
+          "contact_count": 1,
+          "opportunity_count": 0,
+          "activity_count": 0,
+          "org_id": 84765,
+          "sumble_name": "GRUPO COMET (SIKAR FF.VV.)",
+          "sumble_domain": "comet.com",
+          "sumble_url": "https://sumble.com/l/org/yrGeUM8ANz",
+          "sumble_name_alternates": [
+            "Comet",
+            "Comet.ml"
+          ],
+          "sumble_url_alternates": [],
+          "employee_count_int": 82,
+          "headquarters_country": "",
+          "crm_city": "",
+          "crm_state": "",
+          "crm_country": "",
+          "crm_linkedin_url": "",
+          "crm_last_modified": ""
+        }
+      ],
+      "note": "",
+      "id": "dup_0006",
+      "category": "multi_owner",
+      "owners": [
+        "Jordan Lee",
+        "Sam Patel"
+      ],
+      "footprint_records": 2
     },
     {
       "confidence": "high",
@@ -213,7 +539,12 @@
         }
       ],
       "note": "",
-      "id": "dup_0003"
+      "id": "dup_0007",
+      "category": "split_activity",
+      "owners": [
+        "Sam Patel"
+      ],
+      "footprint_records": 2
     },
     {
       "confidence": "high",
@@ -284,145 +615,12 @@
         }
       ],
       "note": "",
-      "id": "dup_0004"
-    },
-    {
-      "confidence": "high",
-      "evidence": [
-        "same_sumble_org"
+      "id": "dup_0008",
+      "category": "split_activity",
+      "owners": [
+        "Sam Patel"
       ],
-      "suggested_survivor_crm_id": "001RP00000RbNL6YAN",
-      "accounts": [
-        {
-          "crm_account_id": "001RP00000RbNL6YAN",
-          "crm_url": "https://sumble.lightning.force.com/lightning/r/Account/001RP00000RbNL6YAN/view",
-          "crm_name": "Varonis",
-          "crm_domain": "varonis.com",
-          "parent_crm_id": "",
-          "owner": "Sam Patel",
-          "is_customer": false,
-          "created_date": "2025-03-07T16:29:11.000+0000",
-          "contact_count": 12,
-          "opportunity_count": 0,
-          "activity_count": 6,
-          "org_id": 448707,
-          "sumble_name": "Varonis",
-          "sumble_domain": "varonis.com",
-          "sumble_url": "https://sumble.com/l/org/RvBUzMXybNg",
-          "sumble_name_alternates": [
-            "Varonis Systems"
-          ],
-          "sumble_url_alternates": [
-            "polyrize.com"
-          ],
-          "employee_count_int": 2679,
-          "headquarters_country": "US",
-          "crm_city": "",
-          "crm_state": "",
-          "crm_country": "",
-          "crm_linkedin_url": "",
-          "crm_last_modified": ""
-        },
-        {
-          "crm_account_id": "001RP00000j1I5wYAE",
-          "crm_url": "https://sumble.lightning.force.com/lightning/r/Account/001RP00000j1I5wYAE/view",
-          "crm_name": "Varonis Systems",
-          "crm_domain": "varonis.com",
-          "parent_crm_id": "",
-          "owner": "Jordan Lee",
-          "is_customer": false,
-          "created_date": "2026-01-07T05:01:21.000+0000",
-          "contact_count": 0,
-          "opportunity_count": 0,
-          "activity_count": 0,
-          "org_id": 448707,
-          "sumble_name": "Varonis",
-          "sumble_domain": "varonis.com",
-          "sumble_url": "https://sumble.com/l/org/RvBUzMXybNg",
-          "sumble_name_alternates": [
-            "Varonis Systems"
-          ],
-          "sumble_url_alternates": [
-            "polyrize.com"
-          ],
-          "employee_count_int": 2679,
-          "headquarters_country": "US",
-          "crm_city": "",
-          "crm_state": "",
-          "crm_country": "",
-          "crm_linkedin_url": "",
-          "crm_last_modified": ""
-        }
-      ],
-      "note": "Same Sumble org but dissimilar CRM names \u2014 verify this isn't a parent/subsidiary pair both matching the parent org.",
-      "id": "dup_0005"
-    },
-    {
-      "confidence": "high",
-      "evidence": [
-        "same_sumble_org"
-      ],
-      "suggested_survivor_crm_id": "001RP00000SZ0wXYAT",
-      "accounts": [
-        {
-          "crm_account_id": "001RP00000SZ0wXYAT",
-          "crm_url": "https://sumble.lightning.force.com/lightning/r/Account/001RP00000SZ0wXYAT/view",
-          "crm_name": "checkpoint",
-          "crm_domain": "checkpoint.com",
-          "parent_crm_id": "",
-          "owner": "Alex Rivera",
-          "is_customer": false,
-          "created_date": "2025-03-26T18:50:37.000+0000",
-          "contact_count": 0,
-          "opportunity_count": 0,
-          "activity_count": 0,
-          "org_id": 6763,
-          "sumble_name": "Check Point Software",
-          "sumble_domain": "checkpoint.com",
-          "sumble_url": "https://sumble.com/l/org/EO37f79rxQ",
-          "sumble_name_alternates": [
-            "Check Point Software Technologies"
-          ],
-          "sumble_url_alternates": [],
-          "employee_count_int": 7163,
-          "headquarters_country": "RO",
-          "crm_city": "",
-          "crm_state": "",
-          "crm_country": "",
-          "crm_linkedin_url": "",
-          "crm_last_modified": ""
-        },
-        {
-          "crm_account_id": "001RP00000j1I5pYAE",
-          "crm_url": "https://sumble.lightning.force.com/lightning/r/Account/001RP00000j1I5pYAE/view",
-          "crm_name": "Check Point Software Technologies",
-          "crm_domain": "checkpoint.com",
-          "parent_crm_id": "",
-          "owner": "Jordan Lee",
-          "is_customer": true,
-          "created_date": "2026-01-07T05:01:21.000+0000",
-          "contact_count": 0,
-          "opportunity_count": 0,
-          "activity_count": 0,
-          "org_id": 6763,
-          "sumble_name": "Check Point Software",
-          "sumble_domain": "checkpoint.com",
-          "sumble_url": "https://sumble.com/l/org/EO37f79rxQ",
-          "sumble_name_alternates": [
-            "Check Point Software Technologies"
-          ],
-          "sumble_url_alternates": [],
-          "employee_count_int": 7163,
-          "headquarters_country": "RO",
-          "crm_city": "",
-          "crm_state": "",
-          "crm_country": "",
-          "crm_linkedin_url": "",
-          "crm_last_modified": ""
-        }
-      ],
-      "note": "Same Sumble org but dissimilar CRM names \u2014 verify this isn't a parent/subsidiary pair both matching the parent org.",
-      "id": "dup_0006"
+      "footprint_records": 2
     },
     {
       "confidence": "high",
@@ -497,40 +695,42 @@
         }
       ],
       "note": "",
-      "id": "dup_0007"
+      "id": "dup_0009",
+      "category": "split_activity",
+      "owners": [
+        "Sam Patel"
+      ],
+      "footprint_records": 2
     },
     {
       "confidence": "high",
       "evidence": [
         "same_sumble_org"
       ],
-      "suggested_survivor_crm_id": "001RP00000i4Ky7YAE",
+      "suggested_survivor_crm_id": "001RP00000k1C9VYAU",
       "accounts": [
         {
-          "crm_account_id": "001RP00000SoVGhYAN",
-          "crm_url": "https://sumble.lightning.force.com/lightning/r/Account/001RP00000SoVGhYAN/view",
-          "crm_name": "cdata.com",
-          "crm_domain": "cdata.com",
+          "crm_account_id": "001RP00000k1C9VYAU",
+          "crm_url": "https://sumble.lightning.force.com/lightning/r/Account/001RP00000k1C9VYAU/view",
+          "crm_name": "Wordpress VIP",
+          "crm_domain": "automattic.com",
           "parent_crm_id": "",
-          "owner": "Jordan Lee",
+          "owner": "Sam Patel",
           "is_customer": false,
-          "created_date": "2025-03-31T21:57:31.000+0000",
-          "contact_count": 0,
+          "created_date": "2026-01-23T20:58:15.000+0000",
+          "contact_count": 1,
           "opportunity_count": 0,
-          "activity_count": 0,
-          "org_id": 28192,
-          "sumble_name": "CData Software",
-          "sumble_domain": "cdata.com",
-          "sumble_url": "https://sumble.com/l/org/UAeWKwND2O",
-          "sumble_name_alternates": [
-            "CDATA SOFTWARE",
-            "CData Virtuality"
-          ],
+          "activity_count": 1,
+          "org_id": 45470,
+          "sumble_name": "Automattic",
+          "sumble_domain": "automattic.com",
+          "sumble_url": "https://sumble.com/l/org/nfqbzNbH4I",
+          "sumble_name_alternates": [],
           "sumble_url_alternates": [
-            "arcesb.com",
-            "arc.cdata.com"
+            "a8c.com",
+            "automatic.com"
           ],
-          "employee_count_int": 469,
+          "employee_count_int": 1690,
           "headquarters_country": "US",
           "crm_city": "",
           "crm_state": "",
@@ -539,30 +739,27 @@
           "crm_last_modified": ""
         },
         {
-          "crm_account_id": "001RP00000i4Ky7YAE",
-          "crm_url": "https://sumble.lightning.force.com/lightning/r/Account/001RP00000i4Ky7YAE/view",
-          "crm_name": "CData Software",
-          "crm_domain": "cdata.com",
+          "crm_account_id": "001RP00000kHyDVYA0",
+          "crm_url": "https://sumble.lightning.force.com/lightning/r/Account/001RP00000kHyDVYA0/view",
+          "crm_name": "A8c",
+          "crm_domain": "a8c.com",
           "parent_crm_id": "",
           "owner": "Sam Patel",
           "is_customer": false,
-          "created_date": "2025-12-17T23:11:37.000+0000",
+          "created_date": "2026-01-28T16:58:39.000+0000",
           "contact_count": 1,
           "opportunity_count": 0,
           "activity_count": 0,
-          "org_id": 28192,
-          "sumble_name": "CData Software",
-          "sumble_domain": "cdata.com",
-          "sumble_url": "https://sumble.com/l/org/UAeWKwND2O",
-          "sumble_name_alternates": [
-            "CDATA SOFTWARE",
-            "CData Virtuality"
-          ],
+          "org_id": 45470,
+          "sumble_name": "Automattic",
+          "sumble_domain": "automattic.com",
+          "sumble_url": "https://sumble.com/l/org/nfqbzNbH4I",
+          "sumble_name_alternates": [],
           "sumble_url_alternates": [
-            "arcesb.com",
-            "arc.cdata.com"
+            "a8c.com",
+            "automatic.com"
           ],
-          "employee_count_int": 469,
+          "employee_count_int": 1690,
           "headquarters_country": "US",
           "crm_city": "",
           "crm_state": "",
@@ -571,8 +768,13 @@
           "crm_last_modified": ""
         }
       ],
-      "note": "Same Sumble org but dissimilar CRM names \u2014 verify this isn't a parent/subsidiary pair both matching the parent org.",
-      "id": "dup_0008"
+      "note": "",
+      "id": "dup_0010",
+      "category": "split_activity",
+      "owners": [
+        "Sam Patel"
+      ],
+      "footprint_records": 2
     },
     {
       "confidence": "high",
@@ -660,77 +862,13 @@
           "crm_last_modified": ""
         }
       ],
-      "note": "Same Sumble org but dissimilar CRM names \u2014 verify this isn't a parent/subsidiary pair both matching the parent org.",
-      "id": "dup_0009"
-    },
-    {
-      "confidence": "high",
-      "evidence": [
-        "same_sumble_org"
+      "note": "",
+      "id": "dup_0011",
+      "category": "concentrated",
+      "owners": [
+        "Sam Patel"
       ],
-      "suggested_survivor_crm_id": "001RP00000Th3DHYAZ",
-      "accounts": [
-        {
-          "crm_account_id": "001RP00000Th3DHYAZ",
-          "crm_url": "https://sumble.lightning.force.com/lightning/r/Account/001RP00000Th3DHYAZ/view",
-          "crm_name": "Comet",
-          "crm_domain": "comet.com",
-          "parent_crm_id": "",
-          "owner": "Jordan Lee",
-          "is_customer": false,
-          "created_date": "2025-04-18T02:18:30.000+0000",
-          "contact_count": 1,
-          "opportunity_count": 0,
-          "activity_count": 0,
-          "org_id": 84765,
-          "sumble_name": "GRUPO COMET (SIKAR FF.VV.)",
-          "sumble_domain": "comet.com",
-          "sumble_url": "https://sumble.com/l/org/yrGeUM8ANz",
-          "sumble_name_alternates": [
-            "Comet",
-            "Comet.ml"
-          ],
-          "sumble_url_alternates": [],
-          "employee_count_int": 82,
-          "headquarters_country": "",
-          "crm_city": "",
-          "crm_state": "",
-          "crm_country": "",
-          "crm_linkedin_url": "",
-          "crm_last_modified": ""
-        },
-        {
-          "crm_account_id": "001RP00000Ug4ccYAB",
-          "crm_url": "https://sumble.lightning.force.com/lightning/r/Account/001RP00000Ug4ccYAB/view",
-          "crm_name": "Comet.ml",
-          "crm_domain": "comet.com",
-          "parent_crm_id": "",
-          "owner": "Sam Patel",
-          "is_customer": true,
-          "created_date": "2025-05-08T17:28:31.000+0000",
-          "contact_count": 1,
-          "opportunity_count": 0,
-          "activity_count": 0,
-          "org_id": 84765,
-          "sumble_name": "GRUPO COMET (SIKAR FF.VV.)",
-          "sumble_domain": "comet.com",
-          "sumble_url": "https://sumble.com/l/org/yrGeUM8ANz",
-          "sumble_name_alternates": [
-            "Comet",
-            "Comet.ml"
-          ],
-          "sumble_url_alternates": [],
-          "employee_count_int": 82,
-          "headquarters_country": "",
-          "crm_city": "",
-          "crm_state": "",
-          "crm_country": "",
-          "crm_linkedin_url": "",
-          "crm_last_modified": ""
-        }
-      ],
-      "note": "Same Sumble org but dissimilar CRM names \u2014 verify this isn't a parent/subsidiary pair both matching the parent org.",
-      "id": "dup_0010"
+      "footprint_records": 1
     },
     {
       "confidence": "high",
@@ -797,76 +935,12 @@
         }
       ],
       "note": "",
-      "id": "dup_0011"
-    },
-    {
-      "confidence": "high",
-      "evidence": [
-        "same_sumble_org"
+      "id": "dup_0012",
+      "category": "concentrated",
+      "owners": [
+        "Sam Patel"
       ],
-      "suggested_survivor_crm_id": "001RP00000k1C9VYAU",
-      "accounts": [
-        {
-          "crm_account_id": "001RP00000k1C9VYAU",
-          "crm_url": "https://sumble.lightning.force.com/lightning/r/Account/001RP00000k1C9VYAU/view",
-          "crm_name": "Wordpress VIP",
-          "crm_domain": "automattic.com",
-          "parent_crm_id": "",
-          "owner": "Sam Patel",
-          "is_customer": false,
-          "created_date": "2026-01-23T20:58:15.000+0000",
-          "contact_count": 1,
-          "opportunity_count": 0,
-          "activity_count": 1,
-          "org_id": 45470,
-          "sumble_name": "Automattic",
-          "sumble_domain": "automattic.com",
-          "sumble_url": "https://sumble.com/l/org/nfqbzNbH4I",
-          "sumble_name_alternates": [],
-          "sumble_url_alternates": [
-            "a8c.com",
-            "automatic.com"
-          ],
-          "employee_count_int": 1690,
-          "headquarters_country": "US",
-          "crm_city": "",
-          "crm_state": "",
-          "crm_country": "",
-          "crm_linkedin_url": "",
-          "crm_last_modified": ""
-        },
-        {
-          "crm_account_id": "001RP00000kHyDVYA0",
-          "crm_url": "https://sumble.lightning.force.com/lightning/r/Account/001RP00000kHyDVYA0/view",
-          "crm_name": "A8c",
-          "crm_domain": "a8c.com",
-          "parent_crm_id": "",
-          "owner": "Sam Patel",
-          "is_customer": false,
-          "created_date": "2026-01-28T16:58:39.000+0000",
-          "contact_count": 1,
-          "opportunity_count": 0,
-          "activity_count": 0,
-          "org_id": 45470,
-          "sumble_name": "Automattic",
-          "sumble_domain": "automattic.com",
-          "sumble_url": "https://sumble.com/l/org/nfqbzNbH4I",
-          "sumble_name_alternates": [],
-          "sumble_url_alternates": [
-            "a8c.com",
-            "automatic.com"
-          ],
-          "employee_count_int": 1690,
-          "headquarters_country": "US",
-          "crm_city": "",
-          "crm_state": "",
-          "crm_country": "",
-          "crm_linkedin_url": "",
-          "crm_last_modified": ""
-        }
-      ],
-      "note": "Same Sumble org but dissimilar CRM names \u2014 verify this isn't a parent/subsidiary pair both matching the parent org.",
-      "id": "dup_0012"
+      "footprint_records": 1
     }
   ],
   "parent_sub": [
@@ -2296,7 +2370,8 @@
         "employee_count_int": 43570,
         "headquarters_country": "US",
         "name_alternates": [],
-        "url_alternates": []
+        "url_alternates": [],
+        "is_pe_firm": true
       },
       "children": [
         {
@@ -2518,7 +2593,8 @@
         "employee_count_int": 15386,
         "headquarters_country": "GB",
         "name_alternates": [],
-        "url_alternates": []
+        "url_alternates": [],
+        "is_pe_firm": true
       },
       "children": [
         {
@@ -2685,7 +2761,8 @@
         "name_alternates": [
           "Vista Equity Partners Management"
         ],
-        "url_alternates": []
+        "url_alternates": [],
+        "is_pe_firm": true
       },
       "children": [
         {
@@ -2784,7 +2861,8 @@
         "name_alternates": [],
         "url_alternates": [
           "sprh.mn"
-        ]
+        ],
+        "is_pe_firm": false
       },
       "children": [
         {
@@ -2853,7 +2931,8 @@
         "employee_count_int": 20574,
         "headquarters_country": "DE",
         "name_alternates": [],
-        "url_alternates": []
+        "url_alternates": [],
+        "is_pe_firm": false
       },
       "children": [
         {
@@ -2896,7 +2975,8 @@
         "employee_count_int": 18597,
         "headquarters_country": "US",
         "name_alternates": [],
-        "url_alternates": []
+        "url_alternates": [],
+        "is_pe_firm": false
       },
       "children": [
         {
@@ -2989,7 +3069,8 @@
           "bellsouth.com",
           "facebook.com/fujiwara.nouen.farm",
           "facebook.com/ashimorimeron"
-        ]
+        ],
+        "is_pe_firm": false
       },
       "children": [
         {
@@ -3036,7 +3117,8 @@
         "name_alternates": [
           "Koch Industries"
         ],
-        "url_alternates": []
+        "url_alternates": [],
+        "is_pe_firm": false
       },
       "children": [
         {
@@ -3077,61 +3159,6 @@
     },
     {
       "parent_org": {
-        "org_id": 832,
-        "name": "Publicis Groupe",
-        "domain": "publicisgroupe.com",
-        "sumble_url": "https://sumble.com/l/org/T4jmnkRrDO",
-        "employee_count_int": 115217,
-        "headquarters_country": "FR",
-        "name_alternates": [
-          "Publicis Chile",
-          "Publicis Groupe Argentina",
-          "Publicis Groupe Brasil",
-          "Publicis Groupe Italia",
-          "Publicis Groupe Peru",
-          "Publicis Groupe Portugal",
-          "Publicis Groupe Thailand",
-          "Publicis One Guatemala",
-          "Publics Groupe"
-        ],
-        "url_alternates": [
-          "vivaki.com"
-        ]
-      },
-      "children": [
-        {
-          "crm_account_id": "001RP00000ZUR5CYAX",
-          "crm_url": "https://sumble.lightning.force.com/lightning/r/Account/001RP00000ZUR5CYAX/view",
-          "crm_name": "Epsilon",
-          "crm_domain": "epsilon.com",
-          "parent_crm_id": "",
-          "owner": "Sam Patel",
-          "is_customer": true,
-          "created_date": "2025-07-29T00:52:43.000+0000",
-          "contact_count": 5,
-          "opportunity_count": 0,
-          "activity_count": 0,
-          "org_id": 868,
-          "sumble_name": "Epsilon",
-          "sumble_domain": "epsilon.com",
-          "sumble_url": "https://sumble.com/l/org/544Tpxsaac",
-          "sumble_name_alternates": [],
-          "sumble_url_alternates": [],
-          "employee_count_int": 8886,
-          "headquarters_country": "US",
-          "crm_city": "",
-          "crm_state": "",
-          "crm_country": "",
-          "crm_linkedin_url": "",
-          "crm_last_modified": ""
-        }
-      ],
-      "id": "px_0009",
-      "type": "parent_not_in_crm",
-      "confidence": "info"
-    },
-    {
-      "parent_org": {
         "org_id": 1260,
         "name": "Blackhawk Network",
         "domain": "blackhawknetwork.com",
@@ -3143,7 +3170,8 @@
           "bhengagement.com",
           "bhn.com",
           "bhnetwork.com"
-        ]
+        ],
+        "is_pe_firm": false
       },
       "children": [
         {
@@ -3191,7 +3219,8 @@
         "name_alternates": [],
         "url_alternates": [
           "warnermusic.com"
-        ]
+        ],
+        "is_pe_firm": false
       },
       "children": [
         {
@@ -3241,7 +3270,8 @@
         ],
         "url_alternates": [
           "iliad-free.fr"
-        ]
+        ],
+        "is_pe_firm": false
       },
       "children": [
         {
@@ -3284,7 +3314,8 @@
         "employee_count_int": 2552,
         "headquarters_country": "CZ",
         "name_alternates": [],
-        "url_alternates": []
+        "url_alternates": [],
+        "is_pe_firm": false
       },
       "children": [
         {
@@ -3329,7 +3360,8 @@
         "name_alternates": [],
         "url_alternates": [
           "team8labs.com"
-        ]
+        ],
+        "is_pe_firm": false
       },
       "children": [
         {
@@ -3374,7 +3406,8 @@
         "name_alternates": [],
         "url_alternates": [
           "mavenlink.com"
-        ]
+        ],
+        "is_pe_firm": false
       },
       "children": [
         {
@@ -3419,7 +3452,8 @@
         "name_alternates": [
           "Integrated Global Solutions Limited"
         ],
-        "url_alternates": []
+        "url_alternates": [],
+        "is_pe_firm": false
       },
       "children": [
         {
@@ -3469,7 +3503,8 @@
         "name_alternates": [
           "Alphabet"
         ],
-        "url_alternates": []
+        "url_alternates": [],
+        "is_pe_firm": false
       },
       "children": [
         {
@@ -3541,7 +3576,8 @@
         "employee_count_int": 3706,
         "headquarters_country": "DE",
         "name_alternates": [],
-        "url_alternates": []
+        "url_alternates": [],
+        "is_pe_firm": false
       },
       "children": [
         {
@@ -3584,7 +3620,8 @@
         "employee_count_int": 1819,
         "headquarters_country": "US",
         "name_alternates": [],
-        "url_alternates": []
+        "url_alternates": [],
+        "is_pe_firm": true
       },
       "children": [
         {
@@ -3627,7 +3664,8 @@
         "employee_count_int": 50657,
         "headquarters_country": "GB",
         "name_alternates": [],
-        "url_alternates": []
+        "url_alternates": [],
+        "is_pe_firm": true
       },
       "children": [
         {
@@ -3673,7 +3711,8 @@
         "employee_count_int": 158,
         "headquarters_country": "VE",
         "name_alternates": [],
-        "url_alternates": []
+        "url_alternates": [],
+        "is_pe_firm": false
       },
       "children": [
         {
@@ -3720,7 +3759,8 @@
         "name_alternates": [
           "Advent International"
         ],
-        "url_alternates": []
+        "url_alternates": [],
+        "is_pe_firm": true
       },
       "children": [
         {
@@ -3771,7 +3811,8 @@
         ],
         "url_alternates": [
           "cdr-inc.com"
-        ]
+        ],
+        "is_pe_firm": true
       },
       "children": [
         {
@@ -3816,7 +3857,8 @@
         "employee_count_int": 261,
         "headquarters_country": "US",
         "name_alternates": [],
-        "url_alternates": []
+        "url_alternates": [],
+        "is_pe_firm": false
       },
       "children": [
         {
@@ -3861,7 +3903,8 @@
         "employee_count_int": 43,
         "headquarters_country": "TT",
         "name_alternates": [],
-        "url_alternates": []
+        "url_alternates": [],
+        "is_pe_firm": false
       },
       "children": [
         {
@@ -3910,7 +3953,8 @@
         ],
         "url_alternates": [
           "hexa.cc"
-        ]
+        ],
+        "is_pe_firm": false
       },
       "children": [
         {
@@ -3953,7 +3997,8 @@
         "employee_count_int": 1145,
         "headquarters_country": "DK",
         "name_alternates": [],
-        "url_alternates": []
+        "url_alternates": [],
+        "is_pe_firm": false
       },
       "children": [
         {

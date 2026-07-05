@@ -12,10 +12,15 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import sys
 from pathlib import Path
 
 FAKE_OWNERS = ["Alex Rivera", "Jordan Lee", "Sam Patel", "Casey Kim", "Riley Chen"]
+
+# Sumble org id -> linkedin.com/company/ slug (organizations.linkedin_url) for
+# CRM records whose website field is a bare social domain.
+LINKEDIN_SLUGS = {2369685: "astronomer", 8305: "tanium"}
 
 
 def _bucket(value: str, n: int) -> int:
@@ -30,6 +35,13 @@ def scrub_account(a: dict) -> None:
     # demo (the footprint then shows only contacts + activities).
     if "opportunity_count" in a:
         a["opportunity_count"] = 0
+    # A CRM record whose website is a bare "linkedin.com" tells the reviewer
+    # nothing — show the org's LinkedIn *company* URL instead.
+    if a.get("crm_domain") == "linkedin.com":
+        slug = LINKEDIN_SLUGS.get(a.get("org_id") or 0) or re.sub(
+            r"[^a-z0-9-]", "", (a.get("sumble_name") or "").lower()
+        )
+        a["crm_domain"] = f"linkedin.com/company/{slug}"
 
 
 def main() -> None:

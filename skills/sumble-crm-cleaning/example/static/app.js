@@ -10,7 +10,45 @@ const state = {
   tab: "duplicates",
   confidence: new Set(), // empty = all
   status: new Set(), // empty = all; values: undecided|accept|reject|skip
+  subtab: {}, // per-tab active sub-tab key (duplicates, parent_not_in_crm)
   search: "",
+};
+
+// Duplicate-cluster resolution buckets (set by analyze.py). Ordered hardest →
+// easiest, matching the default finding order; one sub-tab each.
+const CATEGORIES = [
+  ["multi_owner", "Multiple owners"],
+  ["split_activity", "Split activity"],
+  ["concentrated", "Concentrated"],
+];
+
+// One-line work-queue description per bucket, shown under the sub-tab bar.
+const CATEGORY_DESC = {
+  multi_owner:
+    "Different reps own the records — needs manual review and delicate " +
+    "handling: decide who keeps the account before any merge.",
+  split_activity:
+    "One owner but CRM activity on more than one record — likely merge " +
+    "candidates: merge into the primary so no history is lost.",
+  concentrated:
+    "One owner and activity on at most one record — the obvious delete " +
+    "case: keep the populated record, drop the empty shells.",
+};
+
+// Sub-tabs inside Parents-not-in-CRM: conventional parent/subsidiary
+// roll-ups vs private-equity portfolio roll-ups.
+const PARENT_SUBTABS = [
+  ["conventional", "Parent/sub roll-ups"],
+  ["pe", "PE roll-ups"],
+];
+const PARENT_SUBTAB_DESC = {
+  conventional:
+    "Conventional parent/subsidiary roll-ups — the parent company is " +
+    "missing from the CRM; accept to create it and link the children.",
+  pe:
+    "Private-equity portfolio roll-ups — the owning PE firm is not in the " +
+    "CRM. Portfolio companies usually run as independent accounts; create " +
+    "the parent only if you sell across the whole portfolio.",
 };
 
 const $ = (sel) => document.querySelector(sel);
@@ -33,6 +71,7 @@ async function init() {
   renderSummary();
   renderChips();
   bindToolbar();
+  renderSubtabs();
   render();
 }
 
@@ -49,6 +88,37 @@ function tabItems(tab) {
     accounts: [a],
     unmatched: true,
   }));
+}
+
+/* Sub-tab definitions for the tabs that split into sub-lists: Duplicates by
+   resolution bucket, Parents-not-in-CRM by conventional vs PE roll-up.
+   Returns [key, label, count] triples; empty buckets are dropped, and a tab
+   with no populated buckets shows no sub-tab bar at all (e.g. an old
+   findings.json without categories, or a default run with no PE parents). */
+function subtabsFor(tab) {
+  const defs =
+    tab === "duplicates" ? CATEGORIES : tab === "parent_not_in_crm" ? PARENT_SUBTABS : [];
+  return defs
+    .map(([key, label]) => [key, label, subtabItems(tab, key).length])
+    .filter(([, , n]) => n);
+}
+
+function subtabItems(tab, sub) {
+  const items = tabItems(tab);
+  if (!sub) return items;
+  if (tab === "duplicates") return items.filter((d) => d.category === sub);
+  if (tab === "parent_not_in_crm")
+    return items.filter((g) =>
+      sub === "pe" ? g.parent_org.is_pe_firm : !g.parent_org.is_pe_firm
+    );
+  return items;
+}
+
+function activeSubtab(tab) {
+  const subs = subtabsFor(tab);
+  if (!subs.length) return null;
+  const cur = state.subtab[tab];
+  return subs.some(([key]) => key === cur) ? cur : subs[0][0];
 }
 
 function decisionOf(id) {
@@ -91,12 +161,14 @@ function findingText(item) {
 
 function renderSummary() {
   const m = state.findings.meta;
+  const peCount = subtabItems("parent_not_in_crm", "pe").length;
   const cards = [
     [m.accounts_total, "CRM accounts"],
     [m.accounts_matched, "matched to Sumble"],
     [m.duplicate_clusters, "duplicate clusters"],
     [m.parent_sub_findings, "hierarchy gaps"],
-    [m.parents_not_in_crm, "parents not in CRM"],
+    [subtabItems("parent_not_in_crm", "conventional").length, "parents not in CRM"],
+    ...(peCount ? [[peCount, "PE roll-ups"]] : []),
     [m.accounts_unmatched, "unmatched"],
   ];
   $("#summary").innerHTML = cards
@@ -139,6 +211,36 @@ function renderChips() {
     .join("");
 }
 
+/* Sub-tab bar for the tabs that split into sub-lists, with a one-line
+   description of the active sub-tab underneath. Hidden on tabs without
+   sub-lists. */
+function renderSubtabs() {
+  const box = $("#subtabs");
+  const subs = subtabsFor(state.tab);
+  if (!subs.length) {
+    box.innerHTML = "";
+    box.style.display = "none";
+    return;
+  }
+  const active = activeSubtab(state.tab);
+  const desc =
+    state.tab === "duplicates"
+      ? CATEGORY_DESC[active]
+      : PARENT_SUBTAB_DESC[active];
+  box.style.display = "";
+  box.innerHTML =
+    `<div class="subtab-row">` +
+    subs
+      .map(
+        ([key, label, n]) =>
+          `<button class="subtab cat-${key}${key === active ? " active" : ""}" ` +
+          `data-subtab="${key}">${label}<span class="count">${n}</span></button>`
+      )
+      .join("") +
+    `</div>` +
+    (desc ? `<div class="subtab-desc">${desc}</div>` : "");
+}
+
 function bindToolbar() {
   document.querySelectorAll(".tab").forEach((btn) =>
     btn.addEventListener("click", () => {
@@ -146,9 +248,17 @@ function bindToolbar() {
       document
         .querySelectorAll(".tab")
         .forEach((b) => b.classList.toggle("active", b === btn));
+      renderSubtabs();
       render();
     })
   );
+  $("#subtabs").addEventListener("click", (e) => {
+    const s = e.target.closest(".subtab")?.dataset?.subtab;
+    if (!s) return;
+    state.subtab[state.tab] = s;
+    renderSubtabs();
+    render();
+  });
   $("#confidence-chips").addEventListener("click", (e) => {
     const c = e.target.dataset?.conf;
     if (!c) return;
@@ -173,7 +283,7 @@ function bindToolbar() {
 }
 
 function render() {
-  const items = tabItems(state.tab).filter((item) => {
+  const items = subtabItems(state.tab, activeSubtab(state.tab)).filter((item) => {
     if (state.confidence.size && !state.confidence.has(item.confidence)) return false;
     if (!item.unmatched && state.status.size && !state.status.has(decisionOf(item.id)))
       return false;
@@ -352,6 +462,8 @@ function titleOf(item) {
     return item.type === "parent_conflict"
       ? "CRM parent conflicts with Sumble hierarchy"
       : "Missing parent link";
+  if (item.parent_org?.is_pe_firm)
+    return `PE-firm parent not in CRM — ${esc(item.parent_org.name)}`;
   return `Parent company not in CRM — ${esc(item.parent_org.name)}`;
 }
 
@@ -397,7 +509,28 @@ function dupBody(item) {
     `<table class="acct-table"><tr><th title="What to do with each record">` +
     `Action</th>` +
     acctHead().slice(4) + rows + `</table>` +
-    `<div class="dim chain">${help}</div>`
+    `<div class="dim chain">${dupCategoryHint(item)} ${help}</div>`
+  );
+}
+
+/* One-line triage hint per resolution bucket, shown above the record actions. */
+function dupCategoryHint(item) {
+  if (!item.category) return ""; // older findings.json without categories
+  if (item.category === "multi_owner") {
+    const owners = (item.owners || []).join(", ");
+    return (
+      `<b>Multiple owners</b>${owners ? ` (${esc(owners)})` : ""} — decide who ` +
+      `keeps the account before merging.`
+    );
+  }
+  if (item.category === "split_activity")
+    return (
+      `<b>Split activity</b> — CRM history sits on more than one record; merge ` +
+      `into the primary so none is lost.`
+    );
+  return (
+    `<b>Concentrated</b> — history sits on one record; keep it and drop the ` +
+    `empty shells.`
   );
 }
 

@@ -30,6 +30,17 @@ Parent/subsidiary findings (walking each account's Sumble ancestor chain):
   parent_not_in_crm    the account has a Sumble parent but no ancestor is a
                        CRM account — grouped per parent org → info
 
+Private-equity firms (org tag `is_private_equity_firm`) are NOT suggested as
+parents by default: a buyout firm is rarely a sellable parent account, and its
+portfolio companies run as independent businesses. A child whose only
+resolvable ancestors are PE firms is dropped from parent_not_in_crm; when a
+lower NON-PE ancestor exists, the child groups under that instead. Distinct
+PE orgs skipped as parents are counted in meta.pe_parents_excluded. Set
+`"include_pe_parents": true` in config.json to
+surface PE parents — they come back flagged (`parent_org.is_pe_firm`) so the
+review UI shows them under a "PE roll-ups" sub-tab, separate from the
+conventional parent/sub roll-ups.
+
 Usage:
   python3 analyze.py --raw <output_root>/_raw
 """
@@ -46,15 +57,6 @@ import sumble_v6
 
 MAX_ANCESTOR_DEPTH = 6
 
-# Trailing legal-entity tokens stripped during name normalization (used only
-# for the dissimilar-names note on duplicate clusters). Only ever stripped
-# from the END of a name (repeatedly), so "Limited Brands" survives.
-LEGAL_SUFFIXES = {
-    "inc", "incorporated", "llc", "ltd", "limited", "corp", "corporation",
-    "co", "company", "gmbh", "sa", "sas", "srl", "bv", "ab", "plc", "pty",
-    "llp", "lp", "kk", "oy", "as", "nv", "ag", "spa", "pvt", "sarl",
-}
-
 CONFIDENCE_ORDER = {"high": 0, "medium": 1, "low": 2, "info": 3}
 
 # Duplicate clusters are bucketed by how hard they are to resolve, so the
@@ -62,6 +64,14 @@ CONFIDENCE_ORDER = {"high": 0, "medium": 1, "low": 2, "info": 3}
 # shell-merges. Ordered hardest → easiest (drives the default display order).
 DUP_CATEGORIES = ("multi_owner", "split_activity", "concentrated")
 CATEGORY_ORDER = {c: i for i, c in enumerate(DUP_CATEGORIES)}
+
+# Org tag marking private-equity / buyout firms. PE firms are excluded from
+# parent suggestions unless config.json sets "include_pe_parents": true.
+PE_TAG = "is_private_equity_firm"
+
+
+def is_pe_firm(attrs: dict) -> bool:
+    return PE_TAG in (attrs.get("tags") or [])
 
 
 def norm_domain(raw: str) -> str:
@@ -71,19 +81,6 @@ def norm_domain(raw: str) -> str:
     if d.startswith("www."):
         d = d[4:]
     return d
-
-
-def norm_name(raw: str) -> str:
-    n = (raw or "").lower()
-    n = re.sub(r"[^a-z0-9 ]+", " ", n)
-    tokens = n.split()
-    while tokens and tokens[-1] in LEGAL_SUFFIXES:
-        tokens.pop()
-    return " ".join(tokens)
-
-
-def name_token_key(raw: str) -> str:
-    return " ".join(sorted(norm_name(raw).split()))
 
 
 class UnionFind:
@@ -291,12 +288,6 @@ def find_duplicates(rows: list[dict]) -> list[dict]:
         if len(members) < 2:
             continue
         member_rows = [rows[i] for i in members]
-        note = ""
-        if len({name_token_key(r["crm_name"]) for r in member_rows}) > 1:
-            note = (
-                "Same Sumble org but dissimilar CRM names — verify this isn't a "
-                "parent/subsidiary pair both matching the parent org."
-            )
         category, owners, footprint_records = categorize_cluster(member_rows)
         findings.append(
             {
@@ -307,7 +298,7 @@ def find_duplicates(rows: list[dict]) -> list[dict]:
                 "footprint_records": footprint_records,
                 "suggested_survivor_crm_id": pick_survivor(member_rows),
                 "accounts": [account_payload(r) for r in member_rows],
-                "note": note,
+                "note": "",
             }
         )
     findings.sort(
@@ -447,7 +438,8 @@ def find_parent_sub(
     rows: list[dict],
     org_attrs: dict[int, dict],
     parent_orgs: dict[int, dict],
-) -> tuple[list[dict], list[dict]]:
+    include_pe_parents: bool = False,
+) -> tuple[list[dict], list[dict], int]:
     org_to_rows: dict[int, list[dict]] = {}
     crm_id_to_row: dict[str, dict] = {}
     for r in rows:
@@ -462,6 +454,7 @@ def find_parent_sub(
 
     findings: list[dict] = []
     not_in_crm: dict[int, list[dict]] = {}
+    pe_excluded_ids: set[int] = set()
     for r in rows:
         if not r["org_id"]:
             continue
@@ -489,9 +482,25 @@ def find_parent_sub(
                 break
 
         if suggestion is None:
-            top = chain[-1]
-            attrs = org_attrs.get(top) or parent_orgs.get(top)
-            if attrs and not r["parent_crm_id"]:
+            if r["parent_crm_id"]:
+                continue  # child already has a CRM parent — nothing to group
+            # Group under the highest resolvable ancestor eligible to become a
+            # new CRM parent. PE-firm ancestors are skipped unless the run
+            # opts in — when a lower non-PE ancestor exists the child groups
+            # under it; a child whose only resolvable ancestors are PE firms
+            # is dropped. Every distinct PE org skipped as a parent lands in
+            # meta.pe_parents_excluded.
+            top = None
+            for ancestor in reversed(chain):
+                attrs = org_attrs.get(ancestor) or parent_orgs.get(ancestor)
+                if not attrs:
+                    continue
+                if not include_pe_parents and is_pe_firm(attrs):
+                    pe_excluded_ids.add(ancestor)
+                    continue
+                top = ancestor
+                break
+            if top is not None:
                 not_in_crm.setdefault(top, []).append(r)
             continue
 
@@ -531,9 +540,11 @@ def find_parent_sub(
     grouped: list[dict] = []
     for top in sorted(not_in_crm, key=lambda o: (-len(not_in_crm[o]), o)):
         attrs = org_attrs.get(top) or parent_orgs.get(top) or {}
+        parent = org_payload(attrs)
+        parent["is_pe_firm"] = is_pe_firm(attrs)
         grouped.append(
             {
-                "parent_org": org_payload(attrs),
+                "parent_org": parent,
                 "children": [
                     account_payload(c)
                     for c in sorted(not_in_crm[top], key=lambda c: c["crm_account_id"])
@@ -544,7 +555,7 @@ def find_parent_sub(
         g["id"] = f"px_{i + 1:04d}"
         g["type"] = "parent_not_in_crm"
         g["confidence"] = "info"
-    return findings, grouped
+    return findings, grouped, len(pe_excluded_ids)
 
 
 def write_findings_csv(out_path: Path, findings: dict) -> None:
@@ -651,11 +662,12 @@ def main() -> None:
     matched = [r for r in rows if r["org_id"]]
     unmatched = [r for r in rows if not r["org_id"]]
 
+    include_pe_parents = bool(config.get("include_pe_parents"))
     duplicates = find_duplicates(rows) if "duplicates" in checks else []
-    parent_sub, parent_not_in_crm = (
-        find_parent_sub(rows, org_attrs, parent_orgs_raw)
+    parent_sub, parent_not_in_crm, pe_parents_excluded = (
+        find_parent_sub(rows, org_attrs, parent_orgs_raw, include_pe_parents)
         if "parent_sub" in checks
-        else ([], [])
+        else ([], [], 0)
     )
     for g in parent_not_in_crm:
         alt = org_alternates.get(g["parent_org"]["org_id"] or 0) or {}
@@ -679,6 +691,11 @@ def main() -> None:
             },
             "parent_sub_findings": len(parent_sub),
             "parents_not_in_crm": len(parent_not_in_crm),
+            "include_pe_parents": include_pe_parents,
+            "pe_parents": sum(
+                1 for g in parent_not_in_crm if g["parent_org"].get("is_pe_firm")
+            ),
+            "pe_parents_excluded": pe_parents_excluded,
         },
         "duplicates": duplicates,
         "parent_sub": parent_sub,
@@ -696,6 +713,12 @@ def main() -> None:
         f"parent/subsidiary findings, {m['parents_not_in_crm']} parent orgs "
         f"missing from the CRM, {m['accounts_unmatched']} unmatched."
     )
+    if m["pe_parents_excluded"]:
+        print(
+            f"[analyze] {m['pe_parents_excluded']} PE-firm parent org(s) excluded "
+            f"(default policy) — set \"include_pe_parents\": true in config.json "
+            f"to surface them under a PE roll-ups sub-tab."
+        )
     print(f"[analyze] wrote {output_root / 'findings.json'} and findings.csv")
 
 

@@ -48,7 +48,8 @@ no credits).
   "company": "Acme",
   "checks": ["duplicates", "parent_sub"],
   "crm_url_template": "https://acme.lightning.force.com/lightning/r/Account/{id}/view",
-  "crm_source": "salesforce Account export, 2026-06-11"
+  "crm_source": "salesforce Account export, 2026-06-11",
+  "include_pe_parents": false
 }
 ```
 
@@ -56,6 +57,12 @@ no credits).
 replaced with each account's CRM id to produce a `crm_url` per account
 (linked from every account name in the UI, plus a `crm_url` column in
 `findings.csv`). Omit → names render unlinked.
+
+`include_pe_parents` (optional, default `false`): private-equity firms (org
+tag `is_private_equity_firm`) are NOT suggested as parents by default — see
+"Parent/subsidiary findings" below. `true` surfaces them, flagged
+`parent_org.is_pe_firm` so the UI splits them into a "PE roll-ups"
+sub-tab of the Parents-not-in-CRM tab.
 
 ## `_raw/org_alternates.json` (optional display-only sidecar)
 
@@ -76,7 +83,6 @@ editing it only requires re-running `analyze.py` (no re-fetch, no credits).
 | `BATCH` | 250 orgs/call | fetch_orgs.py |
 | `MAX_PARENT_HOPS` | 3 ancestor levels resolved above the CRM's orgs | fetch_orgs.py |
 | `MAX_ANCESTOR_DEPTH` | 6 — hierarchy-walk cycle guard | analyze.py |
-| `LEGAL_SUFFIXES` | inc/llc/gmbh/… stripped from name ENDS only (dissimilar-names note) | analyze.py |
 
 ## Duplicate evidence → confidence
 
@@ -87,8 +93,7 @@ editing it only requires re-running `analyze.py` (no re-fetch, no credits).
 `same_sumble_org` is the ONLY duplicate evidence: Sumble's matcher
 (`POST /v6/organizations`) mapping two CRM accounts to the same org id. No
 domain or name-similarity matching. Pairs already linked parent↔child in the
-CRM are never duplicate evidence. Clusters with very dissimilar CRM names
-carry a note to check for a parent/subsidiary pair both matching the parent.
+CRM are never duplicate evidence.
 Survivor suggestion order: has owner > is customer > biggest CRM footprint
 (`contact_count + opportunity_count + activity_count`) > most non-empty
 fields > oldest `created_date` > lowest id.
@@ -126,9 +131,24 @@ For each matched account, walk its Sumble `parent_id` chain (nearest first):
 - No ancestor in the CRM but a Sumble parent exists → `parent_not_in_crm`
   (info), grouped one finding per missing parent org with all its CRM children.
 
+### PE-firm parents (excluded by default)
+
+A parent that is a private-equity firm (org tag `is_private_equity_firm`,
+fetched on parent lookups) is rarely a sellable parent account — portfolio
+companies run as independent businesses. So by default `analyze.py` skips PE
+ancestors when picking the `parent_not_in_crm` group parent: the child groups
+under the highest **non-PE** resolvable ancestor instead, and a child whose
+only resolvable ancestors are PE firms is dropped (distinct PE orgs skipped
+as parents are counted in `meta.pe_parents_excluded`, noted in the analyze
+summary). With
+`"include_pe_parents": true`, PE parents are kept and flagged
+(`parent_org.is_pe_firm`, `meta.pe_parents`); the review UI then shows them
+under a "PE roll-ups" sub-tab, separate from conventional roll-ups.
+
 ## Credit cost
 
 `fetch_orgs.py` requests 4 paid attributes (`employee_count`,
 `headquarters_country`, `parent_id`, `subsidiary_ids`) →
-**~5 credits per matched account** (1 base + 4), plus the same per resolved
-ancestor org (usually a small fraction of the account count).
+**~5 credits per matched account** (1 base + 4), plus ~6 per resolved
+ancestor org (the same set + `tags`, for the PE-firm check — ancestors are
+usually a small fraction of the account count).

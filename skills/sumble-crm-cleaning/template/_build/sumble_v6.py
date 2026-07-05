@@ -39,8 +39,11 @@ CLEANING_ATTRIBUTES = [
 ]
 
 # Attributes pulled when resolving parent orgs by id (free ids + the same
-# paid set, so a parent row carries everything the findings UI shows).
-PARENT_ATTRIBUTES = list(CLEANING_ATTRIBUTES)
+# paid set, so a parent row carries everything the findings UI shows), plus
+# `tags` so the analyzer can exclude PE-firm parents by default
+# (`is_private_equity_firm`). +1 credit per parent org — parents are a small
+# fraction of the run.
+PARENT_ATTRIBUTES = [*CLEANING_ATTRIBUTES, "tags"]
 
 # Where a saved key is read from / written to. First existing wins on read;
 # the interactive prompt writes the durable ~/.config path.

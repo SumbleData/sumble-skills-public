@@ -31,15 +31,24 @@ port with `python3 app.py 9002` or `PORT=9002 python3 app.py`.
   organization (the only duplicate evidence the skill uses — no fuzzy name
   matching). Includes pairs no name matcher would catch: Synopsys + BlackDuck
   (acquisition), Wordpress VIP + A8c (both Automattic — hover the "+N" chip on
-  the match line to see the alternate names/domains that explain it). Each
-  record shows its CRM footprint (contacts and activities); pick one **Primary**
-  and the others default to **Merge**, or flip any to **Delete**.
+  the match line to see the alternate names/domains that explain it). The tab
+  splits into three sub-tabs by how hard each cluster is to resolve:
+  **Multiple owners** (different reps own the records — needs manual review),
+  **Split activity** (one owner, history on more than one record — likely merge
+  candidates), and **Concentrated** (one owner, history on at most one record —
+  the obvious delete case). Each record shows its CRM footprint (contacts and
+  activities); pick one **Primary** and the others default to **Merge**, or
+  flip any to **Delete**.
 - **Hierarchy gaps** — 17 missing parent links the org graph knows about
   (GitHub → Microsoft, Wiz → Google, HashiCorp → IBM, …) with the ancestor chain
   shown. A couple (Boomi → Dell) reflect since-divested ownership — exactly what
   the accept/reject review is for.
-- **Parents not in CRM** — 27 parent companies missing entirely, grouped with
-  the child accounts already present.
+- **Parents not in CRM** — 26 parent companies missing entirely, grouped with
+  the child accounts already present, in two sub-tabs: **Parent/sub roll-ups**
+  (19 conventional corporate parents) and **PE roll-ups** (7 private-equity
+  firms — Thoma Bravo, Francisco Partners, Vista, … — kept separate because a
+  buyout firm is rarely a sellable parent account). Skill runs *exclude* PE
+  parents by default; this demo opts in so you can see the sub-tab.
 - **Unmatched** — 4 accounts Sumble couldn't resolve; usually shells or typos.
 
 Then **Export actions.csv** for the change list (`merge` / `delete` /

@@ -618,6 +618,14 @@ the last time it was shown, re-print the whole updated list, not a diff.
      common extra. (Steer users away from hard-excluding `b2b`/`b2c` — many good
      accounts are hybrid; calibrate those instead.)
 
+     **ALWAYS ask about PE firms explicitly**: should private-equity firms be
+     hard-excluded from the whitespace pool (`is_private_equity_firm` in
+     `hard_exclude_tags`)? PE/buyout firms often rank high on tech-hiring
+     signals via their portfolio yet are rarely a sellable account themselves —
+     recommend excluding unless the user actually sells to PE firms (fintech,
+     fund-admin, deal tooling). Their portfolio companies are separate orgs and
+     stay rankable either way.
+
    - **Industry HARD EXCLUDEs — DERIVED PER COMPANY, never a fixed list.** Do
      NOT exclude the same industries every run. Instead **suggest** the
      industries to exclude from the BLEND of:
@@ -688,7 +696,9 @@ the last time it was shown, re-print the whole updated list, not a diff.
    **Whitespace hard-exclude recommendations (modes B/C).** Suggest excludes
    **per company, never a fixed list** — see Q4.2's "Universe filters" for the
    full mechanics. In short: org-type tags (`org_type_*`, `it_services`) go in
-   `hard_exclude_tags` (cheap, rank-time), while **industries are DERIVED** from
+   `hard_exclude_tags` (cheap, rank-time) — and **always ask the PE-firm
+   question** (`is_private_equity_firm`, see Q4.2) — while **industries are
+   DERIVED** from
    the gold-lift audit (zero/near-zero-customer industries) + world/MCP knowledge
    of the company and written to `universe_filters.exclude_industries` (display
    names), confirmed with the user. Industry excludes drop post-fetch (no rank

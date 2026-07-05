@@ -235,29 +235,32 @@ main { padding: 4px 22px 60px; max-width: 1100px; }
   font-weight: 500;
 }
 
-/* duplicate resolution-bucket badges: hardest (multi-owner) → easiest */
-.badge.cat.cat-multi_owner { background: var(--danger-soft); color: var(--danger); }
-.badge.cat.cat-split_activity { background: var(--warn-soft); color: var(--warn); }
-.badge.cat.cat-concentrated { background: var(--accent-soft); color: var(--accent); }
-
-/* category filter chips carry a per-bucket cluster count */
-.chip-count {
-  margin-left: 6px;
-  font-size: 11px;
-  opacity: 0.7;
+/* sub-tab bar: Duplicates split by resolution bucket, Parents-not-in-CRM by
+   conventional vs PE roll-up; a one-line description of the active sub-tab
+   sits underneath */
+.subtabs { padding: 12px 22px 0; }
+.subtab-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.subtab {
+  border: 1px solid var(--border-strong);
+  background: var(--bg-card);
+  border-radius: 16px;
+  padding: 5px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--fg-dim);
 }
-.cat-chip.cat-multi_owner.active {
-  background: var(--danger);
-  border-color: var(--danger);
+.subtab:hover { border-color: var(--fg-muted); color: var(--fg); }
+.subtab.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+  font-weight: 600;
 }
-.cat-chip.cat-split_activity.active {
-  background: var(--warn);
-  border-color: var(--warn);
-}
-.cat-chip.cat-concentrated.active {
-  background: var(--accent);
-  border-color: var(--accent);
-}
+.subtab .count { margin-left: 6px; font-size: 11px; opacity: 0.75; }
+.subtab.cat-multi_owner.active { background: var(--danger); border-color: var(--danger); }
+.subtab.cat-split_activity.active { background: var(--warn); border-color: var(--warn); }
+.subtab.cat-concentrated.active { background: var(--accent); border-color: var(--accent); }
+.subtab-desc { font-size: 12.5px; color: var(--fg-dim); padding-top: 8px; }
 
 .sumble-match {
   font-size: 13px;

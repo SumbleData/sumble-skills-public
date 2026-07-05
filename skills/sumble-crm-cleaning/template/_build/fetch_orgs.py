@@ -159,6 +159,7 @@ def _parent_row(attrs: dict) -> dict:
         "employee_count_int": sumble_v6.exact_employee_count(attrs),
         "headquarters_country": attrs.get("headquarters_country") or "",
         "parent_id": int(attrs["parent_id"]) if attrs.get("parent_id") else None,
+        "tags": attrs.get("tags") or [],
     }
 
 

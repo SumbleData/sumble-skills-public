@@ -16,12 +16,19 @@ user adjudicate each one:
    **Multiple owners** (≥2 distinct owners — decide who keeps the account),
    **Split activity** (one owner, CRM footprint spread across >1 record — merge
    so no history is lost), or **Concentrated** (one owner, footprint on a single
-   record — keep it, drop the shells). The Duplicates tab gets a filter chip per
-   bucket and a badge on every card.
+   record — keep it, drop the shells). The Duplicates tab splits into three
+   **sub-tabs** — one per bucket, hardest first — so each bucket reads as its
+   own work queue.
 2. **Missing parent/subsidiary links** — accounts whose Sumble parent (or
    grandparent) is *another account in the CRM* but no CRM parent link exists
    (or the CRM's link conflicts with Sumble's hierarchy); plus parent
    companies that aren't in the CRM at all (grouped per missing parent).
+   **Private-equity firms are NOT suggested as parents by default** (org tag
+   `is_private_equity_firm`): a buyout firm is rarely a sellable parent
+   account. Opt in with `"include_pe_parents": true` in `_raw/config.json` —
+   PE parents then appear flagged, under a **PE roll-ups sub-tab** of the
+   Parents-not-in-CRM tab, separate from the conventional parent/sub
+   roll-ups sub-tab.
 
 Every accepted finding lands in **`actions.csv`** — one row per CRM change
 (`merge`, `delete`, `set_parent`, `create_parent_and_link`) — the hand-off to
@@ -210,6 +217,13 @@ the details.
      section)
    Record as `checks` in `_raw/config.json`.
 
+   When parent/subsidiary is on, mention the PE default in the same message
+   (one line, no extra question unless the user reacts): *private-equity-firm
+   parents are excluded by default — say so if you want PE roll-ups included
+   and I'll set `include_pe_parents: true` (they get their own tab).* Record
+   the choice as `include_pe_parents` in `_raw/config.json` (omit or `false`
+   = default exclude).
+
 4. **Cost confirmation.** Surface the credit cost before fetching:
    **~5 credits per matched account** (1 base + 4 paid attributes), plus the
    same for each non-CRM parent org resolved (usually a small fraction). For
@@ -224,7 +238,8 @@ the details.
      "company": "<company>",
      "checks": ["duplicates", "parent_sub"],
      "crm_url_template": "<record URL pattern with {id}, or omit>",
-     "crm_source": "<where accounts.csv came from, for the record>"
+     "crm_source": "<where accounts.csv came from, for the record>",
+     "include_pe_parents": false
    }
    ```
 
@@ -301,10 +316,15 @@ findings get accept/reject/skip, while a duplicate cluster is resolved by its
 per-record actions — mark one record **Primary** (the survivor) and the others
 default to **Merge**, switch any to **Delete**, or hit **Not a duplicate** to
 dismiss a false match (decisions save instantly to `decisions.json`). Point out
-the Duplicates tab's resolution-bucket filter chips — **Multiple owners** (hard:
-two reps claim the account), **Split activity** (merge to preserve history), and
-**Concentrated** (easy: keep the populated record) — so the reviewer can work
-the easy buckets first and reserve the owner conflicts for a judgment call. Then
+that the Duplicates tab is split into three sub-tabs —
+**Multiple owners** (hard: two reps claim the account, needs manual review),
+**Split activity** (likely merge candidates — merge to preserve history), and
+**Concentrated** (easy: the obvious delete case, keep the populated record) —
+so the reviewer can work the easy buckets first and reserve the owner conflicts
+for a judgment call. If the run set `include_pe_parents: true`, mention the
+**PE roll-ups** sub-tab under Parents-not-in-CRM: PE-firm parents kept out of
+the conventional roll-ups list so portfolio roll-ups get their own review
+queue. Then
 **Export actions.csv** to get the change list — `merge` / `delete` /
 `set_parent` / `create_parent_and_link` rows keyed by CRM account id, ready
 for the CRM admin, a Data Loader job, or a follow-up agent run. Mention the
