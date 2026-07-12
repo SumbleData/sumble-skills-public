@@ -84,11 +84,11 @@ CATEGORY_META = {
     "icp_persona_count": {"label": "Persona headcount", "default_pct": 45.0},
     "relevant_tech_team_count": {"label": "Tech teams", "default_pct": 30.0},
     "intent_project_tech_count": {
-        "label": "Project × tech jobs (recent)",
+        "label": "Project × tech",
         "default_pct": 15.0,
     },
     "intent_project_persona_count": {
-        "label": "Project × persona jobs (recent)",
+        "label": "Project × persona",
         "default_pct": 10.0,
     },
     "funding": {"label": "Funding (total raised)", "default_pct": 12.0},
@@ -102,6 +102,16 @@ CATEGORY_META = {
     },
     "icp_persona_growth": {"label": "Persona growth (YoY)", "default_pct": 100.0},
     "funding_momentum": {"label": "Funding momentum", "default_pct": 30.0},
+}
+# Concentration / growth categories mirror a Size category signal-for-signal
+# (same personas / tech, keyed by the trailing slug). The value is the Size
+# category to copy per-signal within-weights from; the app surfaces a per-card
+# "Clone weights from Size" button so a rep tunes personas/tech once in Size
+# instead of re-dragging the same sliders in three places.
+CATEGORY_CLONE_FROM = {
+    "icp_persona_concentration": "icp_persona_count",
+    "icp_persona_growth": "icp_persona_count",
+    "relevant_tech_team_concentration": "relevant_tech_team_count",
 }
 
 
@@ -251,6 +261,11 @@ def main() -> None:
             "section": sec,
             "default_pct": float(ov.get("default_pct", meta["default_pct"])),
         }
+        # Mirror categories point at the Size category they clone from — but
+        # only when that source category is itself active for this spec.
+        clone_src = CATEGORY_CLONE_FROM.get(ck)
+        if clone_src and _cat_active(clone_src):
+            categories[ck]["clone_from"] = clone_src
 
     # Optional 1P (or repeated-Sumble) categories from spec — placed in any
     # segment (default: the first). Lets the user weave first-party signals or
@@ -548,7 +563,7 @@ def main() -> None:
             add_signal(
                 key=f"intent_project_tech_count_{pslug}",
                 column=f"{pslug}_x_relevant_tech_jobposts",
-                label=f"{plabel} × ICP tech jobs (3mo)",
+                label=f"{plabel} × tech (3mo)",
                 category="intent_project_tech_count",
                 transform="log",
                 within=project_decay[idx],
@@ -586,7 +601,7 @@ def main() -> None:
             add_signal(
                 key=f"intent_project_persona_count_{pslug}",
                 column=f"{pslug}_x_relevant_persona_jobposts",
-                label=f"{plabel} × ICP persona jobs (3mo)",
+                label=f"{plabel} × persona (3mo)",
                 category="intent_project_persona_count",
                 transform="log",
                 within=project_decay[idx],

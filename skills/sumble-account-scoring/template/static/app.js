@@ -612,6 +612,86 @@ function makeSignalRow(catKey, signal, totalSignalsInCat) {
   );
 }
 
+// Copy the per-signal within-category weights (and pins) from a category's
+// Size counterpart onto it. Concentration / growth categories mirror a Size
+// category signal-for-signal (same personas / tech), so config.clone_from
+// names the source; signals are matched by their trailing slug (the key with
+// the "<category>_" prefix stripped). Lets a rep tune personas/tech once in
+// Size instead of re-dragging the same sliders here.
+function cloneCategoryWeights(catKey) {
+  const cats = state.config.categories || {};
+  const src = (cats[catKey] || {}).clone_from;
+  if (!src || !cats[src]) return;
+  const grouped = signalsByCategory();
+  const srcSignals = grouped[src] || [];
+  const tgtSignals = grouped[catKey] || [];
+  if (!srcSignals.length || !tgtSignals.length) return;
+
+  const srcWithin = state.withinPct[src] || {};
+  const srcPinned = state.withinPinned[src] || {};
+  const bySlug = {};
+  for (const { key } of srcSignals) {
+    bySlug[key.slice(src.length + 1)] = {
+      pct: srcWithin[key] || 0,
+      pinned: !!srcPinned[key],
+    };
+  }
+  state.withinPct[catKey] ||= {};
+  state.withinPinned[catKey] ||= {};
+  for (const { key } of tgtSignals) {
+    const m = bySlug[key.slice(catKey.length + 1)];
+    if (m) {
+      state.withinPct[catKey][key] = m.pct;
+      state.withinPinned[catKey][key] = m.pinned;
+    }
+  }
+  // Defensive renormalise to 100 — matched persona/tech sets already sum ~100,
+  // but this keeps the invariant if the source/target sets ever diverge.
+  const keys = tgtSignals.map((s) => s.key);
+  const sum = keys.reduce((s, k) => s + (state.withinPct[catKey][k] || 0), 0);
+  if (sum > 0) {
+    for (const k of keys) {
+      state.withinPct[catKey][k] =
+        Math.round((state.withinPct[catKey][k] / sum) * 1000) / 10;
+    }
+  }
+  renderCategories();
+  renderTable();
+  if (state.selectedId) updateBreakdown();
+  scheduleAutoSave();
+}
+
+// A per-category "Clone weights from Size" button, or null when the category
+// has no Size mirror (config.clone_from absent, or the source dropped out).
+function makeCloneButton(catKey) {
+  const cats = state.config.categories || {};
+  const catSpec = cats[catKey] || {};
+  const src = catSpec.clone_from;
+  if (!src || !cats[src]) return null;
+  const grouped = signalsByCategory();
+  if (!(grouped[src] || []).length || !(grouped[catKey] || []).length) return null;
+  const srcSecKey = cats[src].section;
+  const srcSecLabel = ((state.config.sections || {})[srcSecKey] || {}).label || "";
+  // "Size (how big is the opportunity)" -> "Size"; falls back to the source
+  // category label if the section is unlabelled.
+  const srcLabel = srcSecLabel ? String(srcSecLabel).split(" (")[0] : cats[src].label;
+  return el(
+    "button",
+    {
+      type: "button",
+      class: "clone-weights-btn",
+      title:
+        `Copy the per-signal weights from “${cats[src].label}” in ${srcLabel} ` +
+        `onto this category (matched by persona/tech).`,
+      onclick: (e) => {
+        e.stopPropagation();
+        cloneCategoryWeights(catKey);
+      },
+    },
+    `⧉ Clone weights from ${srcLabel}`,
+  );
+}
+
 // Build one category accordion card. Used inside a section that has
 // 2+ categories; sections with a single category bypass this and
 // render signals directly via makeSignalRow.
@@ -710,6 +790,8 @@ function makeCategoryCard(catKey, catSpec, grouped) {
   if (catSpec.description) {
     body.appendChild(el("p", { class: "category-desc" }, catSpec.description));
   }
+  const cloneBtn = makeCloneButton(catKey);
+  if (cloneBtn) body.appendChild(cloneBtn);
 
   for (const signal of signals) {
     body.appendChild(makeSignalRow(catKey, signal, signals.length));
@@ -848,6 +930,8 @@ function renderCategories() {
       if (secCats.length === 1) {
         const [catKey] = secCats[0];
         placed.add(catKey);
+        const cloneBtn = makeCloneButton(catKey);
+        if (cloneBtn) body.appendChild(cloneBtn);
         const signals = grouped[catKey] || [];
         for (const signal of signals) {
           body.appendChild(makeSignalRow(catKey, signal, signals.length));
