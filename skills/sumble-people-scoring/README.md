@@ -37,14 +37,14 @@ Install the skill with `npx skills`; the CLI detects supported agents and
 installs into the agent you choose.
 
 ```bash
-npx skills add SumbleData/sumble-skills --skill people-scoring
+npx skills add SumbleData/sumble-skills-public --skill people-scoring
 ```
 
 To install globally for a specific agent without prompts:
 
 ```bash
-npx skills add SumbleData/sumble-skills --skill people-scoring -g -a codex -y
-npx skills add SumbleData/sumble-skills --skill people-scoring -g -a claude-code -y
+npx skills add SumbleData/sumble-skills-public --skill people-scoring -g -a codex -y
+npx skills add SumbleData/sumble-skills-public --skill people-scoring -g -a claude-code -y
 ```
 
 Start a new agent session, then run `/people-scoring` in Claude Code or ask

@@ -4,14 +4,14 @@ Install the Sumble MCP skill into your agent. The `skills` CLI detects
 supported agents and installs into the agent you choose:
 
 ```bash
-npx skills add SumbleData/sumble-skills --skill sumble-mcp
+npx skills add SumbleData/sumble-skills-public --skill sumble-mcp
 ```
 
 To install globally for a specific agent without prompts:
 
 ```bash
-npx skills add SumbleData/sumble-skills --skill sumble-mcp -g -a codex -y
-npx skills add SumbleData/sumble-skills --skill sumble-mcp -g -a claude-code -y
+npx skills add SumbleData/sumble-skills-public --skill sumble-mcp -g -a codex -y
+npx skills add SumbleData/sumble-skills-public --skill sumble-mcp -g -a claude-code -y
 ```
 
 After installation, use the skill with prompts like:
@@ -35,5 +35,5 @@ Use $sumble-mcp to map champions and hiring signals for Stripe.
 
 ## Notes
 
-- The skill lives under `skills/sumble-mcp` in the `SumbleData/sumble-skills` repo.
+- The skill lives under `skills/sumble-mcp` in the `SumbleData/sumble-skills-public` repo.
 - The core skill files are [`SKILL.md`](./SKILL.md), [`agents/openai.yaml`](./agents/openai.yaml), and the documents in [`references/`](./references/).

@@ -51,14 +51,14 @@ Install the skill with `npx skills` (ships with [Node.js](https://nodejs.org));
 the CLI detects supported agents and installs into the agent you choose.
 
 ```bash
-npx skills add SumbleData/sumble-skills --skill sumble-account-scoring
+npx skills add SumbleData/sumble-skills-public --skill sumble-account-scoring
 ```
 
 To install globally for a specific agent without prompts:
 
 ```bash
-npx skills add SumbleData/sumble-skills --skill sumble-account-scoring -g -a codex -y
-npx skills add SumbleData/sumble-skills --skill sumble-account-scoring -g -a claude-code -y
+npx skills add SumbleData/sumble-skills-public --skill sumble-account-scoring -g -a codex -y
+npx skills add SumbleData/sumble-skills-public --skill sumble-account-scoring -g -a claude-code -y
 ```
 
 ### Without `npx` (no Node, no git needed)
@@ -66,7 +66,7 @@ npx skills add SumbleData/sumble-skills --skill sumble-account-scoring -g -a cla
 A skill is just a folder — you can install it by hand:
 
 1. Download this repo as a ZIP:
-   [github.com/SumbleData/sumble-skills → Code → Download ZIP](https://github.com/SumbleData/sumble-skills/archive/refs/heads/main.zip),
+   [github.com/SumbleData/sumble-skills-public → Code → Download ZIP](https://github.com/SumbleData/sumble-skills-public/archive/refs/heads/main.zip),
    then unzip it.
 2. Copy the `skills/sumble-account-scoring` folder into your agent's skills
    directory (`~` is your home folder; create the directory if it doesn't exist):

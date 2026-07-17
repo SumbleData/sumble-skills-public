@@ -58,7 +58,7 @@ The review step earned its keep immediately. Two of the suggested parent links (
 You need a coding agent (**Claude Code**, **OpenAI Codex**, or **Cursor**), a **Sumble API key** ([sumble.com/account](https://sumble.com/account)), and your account list, pulled live from Salesforce or HubSpot if your agent can reach them, or any CSV export with an id, a name, and a website column.
 
 ```bash
-npx skills add SumbleData/sumble-skills --skill sumble-crm-cleaning
+npx skills add SumbleData/sumble-skills-public --skill sumble-crm-cleaning
 ```
 
 Start a new agent session and run it (`/sumble-crm-cleaning` in Claude Code; "use the sumble-crm-cleaning skill" in Codex or Cursor). The interview is four questions: where the output goes, where your accounts live, which checks to run (duplicates, hierarchy, or both; both cost the same, since it's one matching pass), and a cost confirmation before anything is fetched (~5 credits per account; a 2,000-account CRM is ~10,000 credits). If your CRM has a parent-account field, hand it over. The skill suppresses links that are already correct and flags the ones that conflict. Then:

@@ -5,7 +5,7 @@ name: Build skill zips
 # "Get the skill" buttons always serve an archive that matches main.
 #
 # Stable download URL (survives asset re-uploads):
-#   https://github.com/SumbleData/sumble-skills/releases/download/skill-zips/sumble-account-research.zip
+#   https://github.com/SumbleData/sumble-skills-public/releases/download/skill-zips/sumble-account-research.zip
 
 on:
   push:

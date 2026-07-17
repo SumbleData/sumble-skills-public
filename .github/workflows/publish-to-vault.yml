@@ -10,7 +10,7 @@ name: Publish to sx vault
 #   2. Add the PUBLIC key as a Deploy Key WITH WRITE ACCESS on
 #        github.com/SumbleData/skills  (Settings -> Deploy keys).
 #   3. Add the PRIVATE key as an Actions secret named SX_VAULT_DEPLOY_KEY
-#        on github.com/SumbleData/sumble-skills  (Settings -> Secrets -> Actions).
+#        on github.com/SumbleData/sumble-skills-public  (Settings -> Secrets -> Actions).
 
 on:
   push:

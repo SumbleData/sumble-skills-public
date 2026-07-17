@@ -75,33 +75,33 @@ Run one command for the skill you want. The `skills` CLI detects supported
 agents and installs into the agent you choose.
 
 ```bash
-npx skills add SumbleData/sumble-skills --skill sumble-mcp
-npx skills add SumbleData/sumble-skills --skill sumble-account-scoring
-npx skills add SumbleData/sumble-skills --skill sumble-people-scoring
+npx skills add SumbleData/sumble-skills-public --skill sumble-mcp
+npx skills add SumbleData/sumble-skills-public --skill sumble-account-scoring
+npx skills add SumbleData/sumble-skills-public --skill sumble-people-scoring
 ```
 
 To install globally for a specific agent without prompts, add `-g -a <agent>
 -y`:
 
 ```bash
-npx skills add SumbleData/sumble-skills --skill sumble-mcp -g -a codex -y
-npx skills add SumbleData/sumble-skills --skill sumble-account-scoring -g -a claude-code -y
+npx skills add SumbleData/sumble-skills-public --skill sumble-mcp -g -a codex -y
+npx skills add SumbleData/sumble-skills-public --skill sumble-account-scoring -g -a claude-code -y
 ```
 
 List or install the whole repo:
 
 ```bash
-npx skills add SumbleData/sumble-skills --list
-npx skills add SumbleData/sumble-skills --skill '*'
+npx skills add SumbleData/sumble-skills-public --list
+npx skills add SumbleData/sumble-skills-public --skill '*'
 ```
 
 Direct GitHub path installs also work if you want each skill to have its own
 URL-shaped command:
 
 ```bash
-npx skills add https://github.com/SumbleData/sumble-skills/tree/main/skills/sumble-mcp
-npx skills add https://github.com/SumbleData/sumble-skills/tree/main/skills/sumble-account-scoring
-npx skills add https://github.com/SumbleData/sumble-skills/tree/main/skills/sumble-people-scoring
+npx skills add https://github.com/SumbleData/sumble-skills-public/tree/main/skills/sumble-mcp
+npx skills add https://github.com/SumbleData/sumble-skills-public/tree/main/skills/sumble-account-scoring
+npx skills add https://github.com/SumbleData/sumble-skills-public/tree/main/skills/sumble-people-scoring
 ```
 
 Start a new agent session after installing. In Codex, ask it to *"use the
@@ -117,7 +117,7 @@ run `/sumble-account-scoring`, `/sumble-people-scoring`, or `/sumble-mcp`.
 automatically on every push to `main` (see
 `.github/workflows/build-skill-zips.yml`):
 
-- [sumble-account-research.zip](https://github.com/SumbleData/sumble-skills/releases/download/skill-zips/sumble-account-research.zip)
+- [sumble-account-research.zip](https://github.com/SumbleData/sumble-skills-public/releases/download/skill-zips/sumble-account-research.zip)
 
 ## How a skill runs
 
