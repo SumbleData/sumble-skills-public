@@ -1,6 +1,10 @@
 # Sumble MCP Tool Reference
 
-This reference is the standalone operating guide for the Sumble MCP skill.
+This reference is the standalone operating guide for the Sumble MCP skill. It
+is deliberately opinionated about HOW to sequence tools and manage spend, not
+a catalog of tool facts. Exact parameters, query syntax, valid slugs, and
+current credit costs live in each tool's own description — always trust the
+live tool description over this file.
 
 ## Required first step for most sessions
 
@@ -37,9 +41,9 @@ Bad:
 
 ## Tool inventory
 
-### Free account tools
+### Account tools (free — use liberally)
 
-| Tool | Purpose |
+| Tool | When to use |
 |---|---|
 | `GetMyCompanyProfile` | Pull ICP, competitive landscape, key personas, and project signals. Usually call first. |
 | `GetAccountInformation` | Check API key validity, credits, and plan information. |
@@ -48,112 +52,86 @@ Bad:
 
 ### Organization search and enrichment
 
-| Tool | Purpose | Cost |
-|---|---|---|
-| `FindMatchAndEnrichOrganizations` | Find, match, and enrich organizations in one call. Use advanced query filters or resolve supplied names, URLs, or IDs; request only the attributes and technology/job/team/people metrics needed for the task. | 1 credit per matched org + 1 per paid attribute + per-entity metric costs |
-| `GetIntelligenceBrief` | Generate an LLM sales intelligence brief for one target account from Sumble structured data. Use only after narrowing to a high-priority account. | 50 credits per completed brief |
+| Tool | When to use |
+|---|---|
+| `FindMatchAndEnrichOrganizations` | The primary organizations tool: find, match, and enrich in one call. Use advanced query filters or resolve supplied names, URLs, or IDs. Bills per matched org and per selected attribute and entity metric, so request only what the task needs. |
+| `GetIntelligenceBrief` | LLM sales intelligence brief for ONE target account. One of the most expensive tools — use only after narrowing to a high-priority account, and confirm with the user first. |
 
 ### Jobs
 
-| Tool | Purpose | Cost |
-|---|---|---|
-| `FindMatchAndEnrichJobs` | Find, look up, and enrich job postings in one call. Search with advanced query filters or enrich a list of `job_id`s; request only the attributes needed (the full `description` is a paid attribute). To scope to companies, resolve them to IDs first and pass the `organization_ids` param; for saved lists pass the `organization_list_id` param (prefer both over the query language's fuzzy `organization` / `organizations_list` nodes). Optional `related_people` returns hiring managers and adjacent team members per job. | 1 credit per job + 1 per paid attribute (title is free) + 1 per related person returned |
+| Tool | When to use |
+|---|---|
+| `FindMatchAndEnrichJobs` | The primary jobs tool: search with advanced query filters or enrich a list of `job_id`s. Request only the attributes needed — the full `description` is a paid attribute. To scope to companies, resolve them to IDs first and pass the `organization_ids` param; for saved lists pass the `organization_list_id` param (prefer both over the query language's fuzzy `organization` / `organizations_list` nodes). Optional `related_people` returns hiring managers and adjacent team members per job. |
 
 ### People
 
-| Tool | Purpose | Cost |
-|---|---|---|
-| `FindMatchAndEnrichPeople` | Find, match, and enrich people in one call. Resolve person IDs, LinkedIn URLs, or emails (match mode), or search within organizations (filter mode — `organization_ids` and/or `organization_list_id` is REQUIRED) with advanced query filters; request only the attributes needed. The `person_score` attribute ranks people 0-100 against the account's ICP (filter mode, single org only). Optional `related_people` (inferred managers and direct reports) and `email`/`phone` contact reveals. | 1 credit per person + 1 per paid attribute (name is free) + 1 per related person; matching by email costs 20 extra credits when it resolves (unresolved is free); 10 credits per first email reveal, 80 credits per first phone reveal, free on repeat reveals of the same type or if unavailable |
+| Tool | When to use |
+|---|---|
+| `FindMatchAndEnrichPeople` | The primary people tool. Match mode resolves person IDs, LinkedIn URLs, or emails; filter mode searches within organizations and REQUIRES an organization scope (`organization_ids` and/or `organization_list_id`). Request only the attributes needed. The `person_score` attribute ranks people against the account's ICP (filter mode, single org only). Optional `related_people` (inferred managers and direct reports). Contact reveals (`email`, and especially `phone`) are the most expensive attributes — keep them to the top 2-3 targets. |
 
 ### Signals
 
-| Tool | Purpose | Cost |
-|---|---|---|
-| `SearchSignals` | Search Sumble Signals (champion moves, hires and promotions, technology/product mentions, projects, hiring trends) across accounts. Filter by signal IDs, organization IDs, person IDs, technology slugs, job functions, priorities, or saved organization lists; filters AND together, values within a filter OR. Job-post signals include ranked `suggested_contacts`. | 1 credit per signal returned |
-| `SearchPrioritySignals` | Search the user's Priority Signals digest items by source signal IDs, organization IDs, person IDs, or job post IDs. Returns the most recent 20 matches. | 1 credit per priority signal returned; empty results free |
-| `GetOrganizationSignals` | Recent sales signals for ONE target account by Sumble organization ID (resolve names/domains with `FindMatchAndEnrichOrganizations` first). Optional technology-slug filter. Use for "what changed at X" and why-reach-out-now angles. | 1 credit per signal returned |
+| Tool | When to use |
+|---|---|
+| `SearchSignals` | Cross-account signal feed (champion moves, hires and promotions, technology/product mentions, projects, hiring trends). Filter by organization lists, org IDs, person IDs, technology slugs, job functions, or priorities. Job-post signals include ranked `suggested_contacts`. |
+| `SearchPrioritySignals` | The user's Priority Signals digest items, by source signal or entity IDs. |
+| `GetOrganizationSignals` | Recent sales signals for ONE target account by Sumble organization ID (resolve names/domains with `FindMatchAndEnrichOrganizations` first). Use for "what changed at X" and why-reach-out-now angles. |
 
-Signals return `sumble_url` deep links plus `person_id` / `job_post_id` fields
-you can feed into `FindMatchAndEnrichPeople` / `FindMatchAndEnrichJobs` for
-follow-up research.
+Signals bill per signal returned — filter tightly rather than pulling an
+unfiltered feed. Signals return `sumble_url` deep links plus `person_id` /
+`job_post_id` fields you can feed into `FindMatchAndEnrichPeople` /
+`FindMatchAndEnrichJobs` for follow-up research.
 
 ### Organization lists
 
-| Tool | Purpose | Cost |
-|---|---|---|
-| `ListOrganizationLists` | List org lists with IDs, URLs, counts, read-only/deletable flags, deleted status, and Signals inclusion settings. Prefer `type = group` when the user says "my accounts" or "my territory". | 1 credit per list |
-| `GetOrganizationList` | Fetch contents of one org list, including each organization's Sumble profile URL and own website URL. | 1 credit per org |
-| `CreateOrganizationList` | Create an empty org list. | Free |
-| `AddOrganizationsToList` | Add organizations by IDs or slugs. | Free |
-| `SetOrganizationListDeleted` | Soft-delete an org list, or restore a deleted one. | Free |
-| `SetOrganizationListSignals` | Include or exclude a list's accounts from future Signals delivery (lists are included by default). | Free |
+| Tool | When to use |
+|---|---|
+| `ListOrganizationLists` | List org lists with IDs, URLs, counts, and settings. Prefer `type = group` when the user says "my accounts" or "my territory". |
+| `GetOrganizationList` | Fetch contents of one org list. Bills per org in the list. |
+| `CreateOrganizationList` | Create an empty org list. |
+| `AddOrganizationsToList` | Add organizations by IDs or slugs. |
+| `SetOrganizationListDeleted` | Soft-delete an org list, or restore a deleted one. |
+| `SetOrganizationListSignals` | Include or exclude a list's accounts from future Signals delivery (lists are included by default). |
 
 ### Contact lists
 
-| Tool | Purpose | Cost |
-|---|---|---|
-| `ListContactLists` | List contact lists and metadata. | 1 credit per list |
-| `GetContactList` | Fetch people in a contact list. | 1 credit per person |
-| `CreateContactList` | Create an empty contact list. | Free |
-| `AddContactsToList` | Add people by Sumble person IDs. | Free |
+| Tool | When to use |
+|---|---|
+| `ListContactLists` | List contact lists and metadata. |
+| `GetContactList` | Fetch people in a contact list. Bills per person in the list. |
+| `CreateContactList` | Create an empty contact list. |
+| `AddContactsToList` | Add people by Sumble person IDs. |
 
 ### Reference lookups
 
-| Tool | Purpose | Cost |
-|---|---|---|
-| `SearchTechnologies` | Fuzzy free-text technology discovery ("what does Sumble call X?"). | 1 credit per search |
-| `LookupTechnologies` | Resolve a batch of technology names, slugs, or aliases to canonical IDs, slugs, names, and categories. Prefer this over repeated `SearchTechnologies` calls when you already know the names. | 1 credit per 100 matched technologies |
-| `LookupTechnologyCategories` | Resolve technology category slugs or names to canonical categories and their constituent technologies. | 1 credit per 100 matched categories |
-| `LookupJobTitles` | Resolve raw job titles to canonical job function and level for use in filters. | 1 credit per 100 matched titles |
-| `LookupProjects` | Resolve project names or slugs to canonical IDs, slugs, and names. | 1 credit per 100 matched projects |
+| Tool | When to use |
+|---|---|
+| `SearchTechnologies` | Fuzzy free-text technology discovery ("what does Sumble call X?"). |
+| `LookupTechnologies` | Resolve a batch of technology names, slugs, or aliases to canonical IDs, slugs, names, and categories. Prefer this over repeated `SearchTechnologies` calls when you already know the names. |
+| `LookupTechnologyCategories` | Resolve technology category slugs or names to canonical categories and their constituent technologies. This is the source of truth for valid category slugs — never guess category slugs from memory. |
+| `LookupJobTitles` | Resolve raw job titles to canonical job function and level for use in filters. |
+| `LookupProjects` | Resolve project names or slugs to canonical IDs, slugs, and names. |
 
 ### Database
 
-| Tool | Purpose | Cost |
-|---|---|---|
-| `RunSqlQuery` | Read-only DuckDB SQL. Last resort only. Warn the user when using it. | 1 credit per 100 bytes of response |
-| `ListTables` | List available DuckDB tables and columns before writing raw SQL. | Free |
+| Tool | When to use |
+|---|---|
+| `RunSqlQuery` | Read-only DuckDB SQL. Last resort only. Warn the user when using it. Bills by response size — always use `LIMIT` and select only needed columns. |
+| `ListTables` | List available DuckDB tables and columns before writing raw SQL. Free. |
 
-## Query DSL notes
+## Query guardrails
 
-### Common organization filters
+The full query syntax (fields, operators, valid values) is documented in each
+search tool's own description — read it there. The rules below are the
+non-obvious ones:
 
-- `technology`: `EQ`, `IN`, `NOT IN`
-- `technology_category`: `EQ`, `IN`, `NOT IN`
-- `organization`: `EQ`
-- `industry`: `EQ`, `IN`, `NOT IN`
-- `employee_count`: `EQ`, `IN`, range strings like `'100-1000'`, `'1000-'`, `'-500'`
-- `hq_location`: `EQ`, `IN`, `NEQ`, hierarchical values like `'US:Texas:Austin'`
-- `tag`: `EQ`, `IN`
-- `sic_code`: `EQ`
-- `naics_code`: `EQ`
-
-### Common job filters
-
-- `organizations_list`: `EQ`, `IN`
-- `project`: `EQ`, `IN`
-- `job_function`: `EQ`, `IN`, `NOT IN`
-- `job_level`: `EQ`, `IN`, `NOT IN`
-- `country`: `EQ`, `IN`, `NOT IN`
-- `hiring_period`: `EQ` only, one of `'1mo'`, `'3mo'`, `'6mo'`, `'1yr'`, `'18mo'`, `'2yr'`
-
-### Common people filters
-
-- `job_function`: `EQ`, `IN`, `NOT IN`
-- `job_level`: `EQ`, `IN`, `NOT IN`
-- `country`: `EQ`, `IN`, `NOT IN`
-- `technology`: `EQ`, `IN`, `NOT IN`
-- `hiring_period`: `EQ` only
-- `since`: `EQ` only, `YYYY-MM-DD`
-- `person_name`: `EQ`
-
-### Guardrails
-
-- Resolve technologies before passing `technologies`: `LookupTechnologies` for
-  known names (batch, 1 credit per 100), `SearchTechnologies` for fuzzy
-  discovery.
-- Use `LookupJobTitles` to map raw titles to canonical job functions and levels
-  before filtering on them.
+- Resolve identifiers before filtering on them; do not guess slugs or names
+  from memory:
+  - technologies: `LookupTechnologies` for known names, `SearchTechnologies`
+    for fuzzy discovery
+  - technology categories: `LookupTechnologyCategories`
+  - job titles to functions/levels: `LookupJobTitles`
+  - projects: `LookupProjects`
 - Scope jobs/people to companies via the `organization_ids` /
   `organization_list_id` parameters, not the query language's fuzzy
   `organization EQ '<name>'` or `organizations_list` nodes.
@@ -163,12 +141,6 @@ follow-up research.
 - Use full state names in country/location filters.
 - `job_title` and `job_description` are not filterable. Use function and level.
 - Prefer structured tools over `RunSqlQuery`.
-
-## Technology category slugs
-
-Use these exact slugs with `technology_category` or `technology_categories`:
-
-`crm`, `business-intelligence`, `cloud-data-warehouse`, `data-catalog`, `gen-ai`, `mlops`, `ml-training`, `cybersecurity`, `cloud-security`, `ci-cd`, `ipaas`, `event-streaming`, `data-pipeline-orchestration`, `etl`, `logging-observability-monitoring`, `data-quality-and-observability`, `customer-data-platform`, `feature-flagging-and-a-b-testing`, `vector-database`, `oss-data-science`, `commercial-data-science`, `infrastructure-as-code-tools`, `design`, `javascript`, `siem`, `edr`, `headless-cms`, `ccaas`, `endpoint-management`, `ecommerce-platform`, `vibe-coding`, `coding-agents`, `marketing-automation-platforms`, `frontier-ai-models`, `processing-units-and-chips`, `cloud-and-container-orchestration-platforms`, `identity-and-access-management`
 
 ## Priority workflows
 
@@ -189,16 +161,15 @@ AND hiring_period EQ '3mo'
 
    Optionally also call `SearchSignals` filtered to the list
    (`account_list_ids`) for champion moves and other non-hiring triggers.
-
 5. Tier accounts:
    A. hiring signal on key projects or key categories
    B. weaker or older signals
    C. no recent signal
 6. Present ranked evidence and stop before deeper enrich spend. Ask which A-tier accounts to deep-dive.
 
-Budget: roughly 300 credits for a 100-account list. The key cost saver is using
-one `FindMatchAndEnrichJobs` pass with few attributes and only requesting
-expensive organization attributes or entity metrics after the list is narrowed.
+The key cost saver is using one `FindMatchAndEnrichJobs` pass with few
+attributes, and only requesting expensive organization attributes or entity
+metrics after the list is narrowed.
 
 ### P2: Live demo, one account end to end
 
@@ -217,8 +188,6 @@ Trigger: demo flow, deep research to outreach in under 3 minutes
     A. signal-led, using language from the job description
     B. reference-customer-led, using the company profile
 
-Budget: roughly 100 credits.
-
 ### P3: Inbound MQL response
 
 Trigger: "got this inbound, help me work it"
@@ -235,14 +204,12 @@ Trigger: "got this inbound, help me work it"
 10. Save the relevant people to a contact list.
 11. Draft response and multithread outreach.
 
-Budget: roughly 60-80 credits.
-
 ## Additional workflow patterns
 
 ### Tech-based prospecting
 
 1. `GetMyCompanyProfile`
-2. `SearchTechnologies`
+2. `LookupTechnologies` (or `SearchTechnologies` for fuzzy discovery)
 3. `FindMatchAndEnrichOrganizations`
 4. `CreateOrganizationList`
 5. `AddOrganizationsToList`
@@ -283,11 +250,17 @@ Budget: roughly 60-80 credits.
 
 ## Cost management
 
+Current credit prices are stated in each tool's description — quote those, not
+remembered numbers. The durable rules:
+
 - Free tools can be used liberally.
-- Tighten organization filters before `FindMatchAndEnrichOrganizations`, then request only needed paid attributes and entity metrics.
-- `GetIntelligenceBrief` is 50 credits per completed brief. Use it after narrowing to a high-priority account.
-- Phone reveals in `FindMatchAndEnrichPeople` are expensive (80 credits). Prefer email-only when email is enough; keep contact reveals to the top 2-3 targets.
-- Signals tools bill 1 credit per signal returned — filter tightly (list, org, technology, priority) rather than pulling an unfiltered feed.
-- `RunSqlQuery` bills by response size. Always use `LIMIT` and select only the columns you need.
+- Billed search/enrich tools charge per returned row and per selected
+  attribute or entity metric. Tighten filters first, then request only the
+  attributes and metrics the task needs.
+- The most expensive operations are `GetIntelligenceBrief`, phone reveals,
+  and broad unfiltered pulls (signal feeds, large `RunSqlQuery` responses).
+  Narrow to selected accounts or the top 2-3 people first, and get explicit
+  user confirmation before high-spend paths.
+- Prefer email-only reveals when email is enough; phone is far more expensive.
 - On a 402 response, direct the user to purchase more credits.
 - Always surface URLs returned by the tools.

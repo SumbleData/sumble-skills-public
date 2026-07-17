@@ -11,8 +11,10 @@ planning/demoing account-research motions built on its tools.
 
 ## Read this first
 
-- Read `references/tool-reference.md` for the full tool inventory, costs, query
-  DSL, workflows, and credit guardrails.
+- Read `references/tool-reference.md` for the tool inventory, sequencing,
+  workflows, and credit guardrails. Exact parameters, query syntax, valid
+  slugs, and current credit costs live in each tool's own description — trust
+  those over any remembered numbers or lists.
 - Read `references/product-context.md` only when you need setup steps,
   marketplace-facing positioning, or end-user examples.
 
@@ -23,9 +25,11 @@ planning/demoing account-research motions built on its tools.
   session.
 - When a Sumble tool exposes a `reason` parameter, make it meaningful and
   specific to the action.
-- Resolve technologies before any call that takes a `technologies` parameter:
-  `LookupTechnologies` for known names (batch), `SearchTechnologies` for fuzzy
-  discovery. Use `LookupJobTitles` to map raw titles to job functions/levels.
+- Resolve identifiers before filtering on them — never guess slugs from
+  memory: `LookupTechnologies` for known technology names (batch),
+  `SearchTechnologies` for fuzzy discovery, `LookupTechnologyCategories` for
+  valid category slugs, `LookupJobTitles` to map raw titles to job
+  functions/levels.
 - For "what changed at this account" or prospecting-trigger questions, use the
   Signals tools (`SearchSignals`, `GetOrganizationSignals`,
   `SearchPrioritySignals`) before reaching for job or people searches.
