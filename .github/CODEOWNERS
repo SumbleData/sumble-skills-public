@@ -1,0 +1,5 @@
+# Makes the required PR review on main meaningful for a public repo: without a
+# code-owner restriction, any GitHub account (including a throwaway one) could
+# satisfy the "1 approving review" rule. This ties the counted approval to the
+# sumble-skills-write team (all current SumbleData org members).
+* @SumbleData/sumble-skills-write
