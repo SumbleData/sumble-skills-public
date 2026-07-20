@@ -12,7 +12,6 @@ people-scoring-weights.json -> scoring_formula):
     seniority_frac  = job_level_rank / max_job_level_rank
     jf_score        = jf_range[slug].min
                       + (jf_range[slug].max - jf_range[slug].min) * seniority_frac
-    seniority_score = seniority_frac
     skill_score     = min(skill_count, skill_cap) / skill_cap
     <signal>_score  = <signal>_norm        (already 0-1)
     people_score    = Σ (weight_pct/100) * factor_score      # lands in [0, 1]
@@ -86,7 +85,6 @@ def score_row(row: dict[str, Any], spec: dict[str, Any]) -> dict[str, float]:
 
     factor_scores: dict[str, float] = {
         "jf": jf_score,
-        "seniority": sen_frac,
         "skills": skill_score,
     }
     # 1P signals contribute their pre-normalised <norm_column> value directly.
@@ -135,7 +133,7 @@ def main() -> int:
     if args.top > 0:
         scored = scored[: args.top]
 
-    extra_cols = ["rank", "people_score", "jf_score", "seniority_score", "skills_score"]
+    extra_cols = ["rank", "people_score", "jf_score", "skills_score"]
     extra_cols += [f"{(s.get('weight_key') or s.get('key'))}_score"
                    for s in spec["one_p_signals"]]
     base_cols = list(rows[0].keys())

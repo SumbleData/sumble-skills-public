@@ -23,22 +23,15 @@
   ],
   "weights": {
     "jf": {
-      "default": 38.0,
-      "current": 38.0,
+      "default": 70.37,
+      "current": 70.37,
       "min": 0,
       "max": 100,
       "label": "Job Function (%)"
     },
-    "seniority": {
-      "default": 46.0,
-      "current": 46.0,
-      "min": 0,
-      "max": 100,
-      "label": "Seniority (%)"
-    },
     "skills": {
-      "default": 16.0,
-      "current": 16.0,
+      "default": 29.63,
+      "current": 29.63,
       "min": 0,
       "max": 100,
       "label": "Skills (%)"

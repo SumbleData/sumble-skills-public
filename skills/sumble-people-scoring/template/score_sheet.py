@@ -21,7 +21,6 @@ and at startup, and the in-app Download button serves the same sheet.
 The score mirrors the app's client math and score_leads.py exactly:
   seniority_frac  = job_level_rank / max_job_level_rank
   jf_score        = jf_range.min + (jf_range.max - jf_range.min) * seniority_frac
-  seniority_score = seniority_frac
   skill_score     = min(skill_count, skill_cap) / skill_cap
   1p factor       = its pre-normalised <norm_column> value
   people_score    = 100 * Σ (weight_pct/100) * factor_score
@@ -78,7 +77,7 @@ def factor_scores(row: dict, config: dict) -> dict[str, float]:
     cap = config.get("skill_cap", 5) or 5
     skill_score = min(_f(row.get("skill_count")), cap) / cap
 
-    out = {"jf": jf_score, "seniority": sen_frac, "skills": skill_score}
+    out = {"jf": jf_score, "skills": skill_score}
     for sig in config.get("one_p_signals", []) or []:
         key = sig.get("weight_key") or f"1p_{sig.get('key')}"
         out[key] = _f(row.get(sig.get("norm_column") or f"{sig.get('key')}_norm"))

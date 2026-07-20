@@ -50,14 +50,12 @@ function scoreRow(row, config) {
   const senFrac = maxRank > 0 ? rank / maxRank : 0;
 
   const jfScore = jfRange.min + (jfRange.max - jfRange.min) * senFrac;
-  const senScore = senFrac;
   const skillScore = Math.min(row.skill_count || 0, skill_cap || 5) / (skill_cap || 5);
 
   const wJf = weightFor("jf");
-  const wSen = weightFor("seniority");
   const wSkill = weightFor("skills");
 
-  let total = wJf * jfScore + wSen * senScore + wSkill * skillScore;
+  let total = wJf * jfScore + wSkill * skillScore;
 
   // 1P signal factors — norm columns are pre-normalised 0–1 in data.csv.
   const oneP = [];
@@ -69,7 +67,7 @@ function scoreRow(row, config) {
     oneP.push({ sig, w, norm, raw });
   }
 
-  return { total, jfScore, senScore, skillScore, wJf, wSen, wSkill, jfRange, oneP };
+  return { total, jfScore, skillScore, wJf, wSkill, jfRange, oneP };
 }
 
 function fmtScore(s) {
@@ -363,12 +361,6 @@ function renderBreakdown(row, s) {
       weight: s.wJf,
     },
     {
-      factor: `Seniority — ${row.job_level || "—"}`,
-      detail: `rank ${row.job_level_rank || 0} / ${row.max_job_level_rank || 19}`,
-      score: s.senScore,
-      weight: s.wSen,
-    },
-    {
       factor: `Skills — ${row.skill_count || 0} matched`,
       detail: (row.matched_skills || "none"),
       score: s.skillScore,
@@ -467,11 +459,16 @@ function fmtW(v) {
 
 function renderWeightSliders() {
   const container = document.getElementById("weight-sliders");
+  // Keep the job-function range sliders alive across re-renders: if a prior
+  // render nested them inside this container, park them outside before we wipe.
+  const jfSliders = document.getElementById("jf-range-sliders");
+  if (jfSliders && jfSliders.parentElement === container) container.after(jfSliders);
   container.innerHTML = "";
   for (const [key, spec] of Object.entries(_config.weights)) {
     const val = spec.current ?? spec.default;
     const div = document.createElement("div");
     div.className = "weight-slider-row";
+    div.id = "weight-row-" + key;
     div.innerHTML = `
       <div class="slider-label">
         <span>${esc(spec.label)}</span>
@@ -510,6 +507,32 @@ function renderWeightSliders() {
         _config.weights[key].current ?? _config.weights[key].default ?? 0
       );
     });
+  }
+  // Put the per-function Min/Max range sliders directly under the Job Function
+  // weight row, collapsed behind a disclosure arrow ON that row (so the ranges
+  // read as a detail of the Job Function weight — no separate heading).
+  const jfRow = document.getElementById("weight-row-jf");
+  if (jfRow && jfSliders) {
+    jfRow.after(jfSliders);
+    jfSliders.style.marginLeft = "12px";
+    jfSliders.style.display = "none"; // collapsed by default
+    const labelSpan = jfRow.querySelector(".slider-label > span");
+    if (labelSpan && !labelSpan.querySelector(".jf-disclosure")) {
+      const arrow = document.createElement("button");
+      arrow.type = "button";
+      arrow.className = "jf-disclosure";
+      arrow.textContent = "▶";
+      arrow.title = "Show/hide per-function score ranges";
+      arrow.style.cssText =
+        "background:none;border:none;cursor:pointer;padding:0;" +
+        "margin-right:4px;font-size:10px;color:#64748b;line-height:1;";
+      arrow.addEventListener("click", () => {
+        const show = jfSliders.style.display === "none";
+        jfSliders.style.display = show ? "" : "none";
+        arrow.textContent = show ? "▼" : "▶";
+      });
+      labelSpan.prepend(arrow, " ");
+    }
   }
 }
 
