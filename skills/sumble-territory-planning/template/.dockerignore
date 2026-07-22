@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+# Build-time scratch only; not needed at runtime. territory.csv and
+# territory-plan.json live at the root and ARE needed, so they stay.
+_raw/
+.gitignore
+Dockerfile
+.dockerignore

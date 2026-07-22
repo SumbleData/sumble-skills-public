@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Territory planning</title>
+    <link rel="stylesheet" href="/style.css" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  </head>
+  <body>
+    <header class="topbar">
+      <a href="https://sumble.com" class="brand" target="_blank" rel="noopener">
+        <img class="brand-icon" src="https://sumble.com/logo512.png" alt="" />
+        <img class="brand-wordmark" src="https://sumble.com/img/sumble-wordmark.svg" alt="Sumble" />
+      </a>
+      <div class="topbar-meta">
+        <span id="customer-name"></span>
+        <span class="dot">·</span>
+        <span id="row-summary"></span>
+        <div class="btn-stack">
+          <button id="export-actions" class="btn-download"
+                  title="Download every accepted / manual owner change as a CRM-ready sheet">
+            Export approved moves</button>
+          <button id="export-sheet" class="btn-download btn-download-secondary"
+                  title="Download the full territory sheet, including every flag and activity count">
+            Download territory.csv</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="terr-layout">
+      <nav class="tabs" role="tablist">
+        <button class="tab active" data-tab="overview" role="tab">Overview</button>
+        <button class="tab" data-tab="reps" role="tab">Reps</button>
+        <button class="tab" data-tab="accounts" role="tab">Accounts</button>
+        <button class="tab" data-tab="moves" role="tab">Moves <span id="moves-badge" class="tab-badge"></span></button>
+        <button class="tab" data-tab="export" role="tab">Export</button>
+      </nav>
+      <p id="tab-description" class="tab-description"></p>
+
+      <!-- ================= Overview ================= -->
+      <section id="view-overview" class="view">
+        <div id="overview-segments"></div>
+        <h3 class="terr-h3">Accounts needing attention</h3>
+        <p class="eval-diag-sub">Click any card to open that set in the Accounts tab.</p>
+        <div id="highlight-cards" class="highlight-cards"></div>
+      </section>
+
+      <!-- ================= Reps ================= -->
+      <section id="view-reps" class="view hidden">
+        <p class="eval-diag-sub" id="reps-note"></p>
+        <div class="table-wrap">
+          <table id="reps-table">
+            <thead></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ================= Accounts ================= -->
+      <section id="view-accounts" class="view hidden">
+        <div id="account-filters" class="category-filter"></div>
+        <div class="search-wrap">
+          <input id="search-input" type="search"
+                 placeholder="Search name, domain, owner… (press / to focus)" autocomplete="off" />
+          <select id="rep-filter" class="terr-select"><option value="">All reps</option></select>
+          <select id="segment-filter" class="terr-select"><option value="">All segments</option></select>
+        </div>
+        <div class="table-wrap">
+          <table id="accounts-table">
+            <thead></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="pagination">
+          <button id="page-prev" class="btn-page" type="button">‹ Prev</button>
+          <span id="page-info" class="page-info"></span>
+          <button id="page-next" class="btn-page" type="button">Next ›</button>
+        </div>
+      </section>
+
+      <!-- ================= Moves ================= -->
+      <section id="view-moves" class="view hidden">
+        <div id="moves-balance" class="moves-balance"></div>
+        <div id="moves-groups"></div>
+      </section>
+
+      <!-- ================= Export ================= -->
+      <section id="view-export" class="view hidden">
+        <div id="export-summary" class="export-summary"></div>
+        <div class="btn-stack btn-stack-row">
+          <button id="export-actions-2" class="btn-download">Download actions.csv</button>
+          <button id="export-sheet-2" class="btn-download btn-download-secondary">Download territory.csv</button>
+        </div>
+        <h3 class="terr-h3">Approved changes</h3>
+        <div class="table-wrap">
+          <table id="export-table">
+            <thead></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <aside id="detail-panel" class="detail-panel hidden">
+      <div class="breakdown-header">
+        <div>
+          <h2 id="detail-name"></h2>
+          <p id="detail-meta"></p>
+        </div>
+        <button id="detail-close" class="btn-icon" aria-label="Close">×</button>
+      </div>
+      <div id="detail-body"></div>
+    </aside>
+
+    <script src="/app.js"></script>
+  </body>
+</html>
