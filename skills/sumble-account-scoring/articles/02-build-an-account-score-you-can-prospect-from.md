@@ -28,7 +28,7 @@ Part 1 argued that a good account score is the start of a prospecting conversati
 
 ## 1. Install the skill
 
-A skill is just a folder of instructions your coding agent reads. There are two ways to get it.
+A skill is just a folder of instructions your coding agent reads. There are a few ways to get it.
 
 If you have `npx` (it ships with [Node.js](https://nodejs.org)), one command installs the skill into whichever agents you choose:
 
@@ -46,7 +46,9 @@ No `npx` or git? Install it by hand:
    - **OpenAI Codex:** `~/.codex/skills/sumble-account-scoring`
    - **Cursor:** `~/.cursor/skills/sumble-account-scoring`
 
-Either way, start a **new agent session** so the skill is picked up, then run it: on Claude Code type `/sumble-account-scoring`; on Codex or Cursor, ask it to use the sumble-account-scoring skill.
+On the Claude desktop app you don't need `npx` or git: start a new chat and ask Claude to install the `sumble-account-scoring` skill from [github.com/SumbleData/sumble-skills-public](https://github.com/SumbleData/sumble-skills-public/tree/main/skills/sumble-account-scoring) and it saves the skill for you. You can also add it by hand under **Settings → Capabilities → Skills**.
+
+Whichever route you take, start a **new agent session** so the skill is picked up, then run it: on Claude Code type `/sumble-account-scoring`; on Codex, Cursor, or the Claude desktop app, ask it to use the sumble-account-scoring skill.
 
 ## 2. The interview
 
