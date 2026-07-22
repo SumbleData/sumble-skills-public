@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import getpass
+import math
 import os
 import re
 import sys
@@ -160,11 +161,159 @@ def _in_list(values: list[str]) -> str:
     return "(" + ", ".join(_q(v) for v in values) + ")"
 
 
+# z for the Wilson score interval (see `_share`). 1.96 = 95% confidence — the
+# standard choice, not tuned per run. Raise to 2.58 (99%) if a pull's thin-data
+# tail still saturates the p99 normaliser.
+CONFIDENCE_Z = 1.96
+
+
+def _share(numerator: float, denominator: float) -> float:
+    """Concentration percentage as the WILSON 95% lower confidence bound.
+
+    Plain English: the lowest share that could plausibly explain what we
+    observed. 1 team of 1 using the tech is consistent with a company that's
+    only ~21% concentrated, so it scores 21 — while 266 of 3630 is pinned tight
+    and scores 6.5, essentially its raw 7.3%.
+
+    Why not the raw ratio: it treats 1/1 and 900/900 as identically "100%", so
+    orgs we know almost nothing about saturate the signal. On a 4,884-row pull
+    192 orgs read >=99% design share with a MEDIAN denominator of 1; the p99
+    normaliser then fits to those and a well-measured org's genuine 7% share
+    normalises to ~0.07 — the signal ends up ranking how LITTLE data an org has.
+    The lower bound shrinks thin evidence toward 0 and leaves well-measured orgs
+    essentially untouched, with one standard constant instead of a tuned prior.
+
+    Deliberately conservative: every share reads slightly below its raw value.
+    That's uniform enough not to disturb ranking among well-measured orgs.
+    """
+    if numerator <= 0 or denominator <= 0:
+        return 0.0
+    # max() guards the rounding artifacts of a recovered denominator (see
+    # `recover_total`); a proportion above 1 is not meaningful.
+    z, n = CONFIDENCE_Z, max(denominator, numerator)
+    p = numerator / n
+    z2 = z * z
+    lb = (
+        p + z2 / (2 * n) - z * math.sqrt(p * (1 - p) / n + z2 / (4 * n * n))
+    ) / (1 + z2 / n)
+    return round(max(100.0 * lb, 0.0), 3)
+
+
+def recover_total(pairs: list[tuple[float, float]]) -> float:
+    """Recover the org-wide concentration DENOMINATOR from (count, ratio) pairs.
+
+    WORKAROUND — delete once /v6/organizations exposes hierarchy-scoped counts
+    as attributes (`hp_jobs_count` / `hp_people_count` / `hp_teams_count` already
+    exist on the `organizations` table; flagged to the API team). The endpoint
+    returns `people_concentration` / `job_post_concentration` as a RATIO only, but
+    the Wilson bound in `_share` needs the sample size, so we invert:
+    `denominator = count / ratio`.
+
+    The ratio is rounded to 4dp, so precision degrades as the share gets small
+    (at a 0.02% share the recovered total is ~25% off; below ~0.005% the ratio
+    rounds to 0.0 and is unrecoverable). Every persona shares ONE denominator
+    (org-wide people) and every tech shares ONE denominator (org-wide job posts),
+    so we recover it a single time from the pair with the LARGEST count — the
+    best-conditioned one available — and reuse it across all signals. A tech with
+    500 posts at 0.0250 pins the total to 20,000 +/-0.2%.
+
+    Returns 0.0 when nothing is recoverable (every count 0, or every ratio
+    rounded away). `_share` then reads 0.0, which is the right answer in both
+    cases: no measured presence, or a share too small to register.
+    """
+    best_total = 0.0
+    best_count = 0.0
+    for count, ratio in pairs:
+        if count > best_count and ratio > 0:
+            best_count = count
+            best_total = count / ratio
+    return round(best_total)
+
+
+def tech_members(t: dict) -> list[str]:
+    """Member technology slugs of a SYNTHETIC category (kind == 'synthetic').
+
+    A synthetic category is an agent-authored set treated as ONE deduped signal,
+    used when no *predefined* Sumble technology_category expresses the ICP
+    grouping. `members` are individual technology slugs; a synthetic category may
+    ALSO absorb whole predefined categories via `member_categories`.
+    """
+    return [str(s) for s in (t.get("members") or [])]
+
+
+def tech_member_categories(t: dict) -> list[str]:
+    """Predefined technology_category slugs absorbed by a SYNTHETIC category.
+
+    Lets a synthetic category extend a predefined one rather than restate it:
+    `member_categories: ["generative-ai-tools"]` plus `members: [...]` scores the
+    whole category OR the extra slugs as a single deduped signal. Absorbing the
+    category (instead of hand-expanding its members) keeps the signal in sync
+    when Sumble later adds a technology to that category.
+    """
+    return [str(s) for s in (t.get("member_categories") or [])]
+
+
+def synthetic_tech_query(t: dict) -> str:
+    """DSL term for a synthetic category, e.g. `technology IN ('a', 'b')` or
+    `(technology IN ('a') OR technology_category IN ('c'))`.
+
+    Sent as an `advanced_query` entity. Its `team_count` is the DEDUPED count of
+    teams using ANY member — the same counter the endpoint uses for a predefined
+    `technology_category` aggregate, so a synthetic category and a predefined one
+    have identical semantics; only the membership is authored rather than looked
+    up. A team using three members still counts once.
+
+    NB: `granularity` is rejected by the endpoint on `advanced_query` (it is
+    valid only for `technology_category`), so `tech_entity` leaves it None — the
+    dedupe is intrinsic to the query, not a granularity setting.
+    """
+    parts = []
+    if tech_members(t):
+        parts.append(f"technology IN {_in_list(tech_members(t))}")
+    if tech_member_categories(t):
+        parts.append(f"technology_category IN {_in_list(tech_member_categories(t))}")
+    if not parts:
+        return ""
+    return parts[0] if len(parts) == 1 else "(" + " OR ".join(parts) + ")"
+
+
+def expand_tech_slugs(techs: list[dict]) -> list[str]:
+    """Every INDIVIDUAL technology slug implied by `techs`, order-preserved and
+    deduped: plain techs plus the members of each synthetic category. Predefined
+    categories are excluded (they live under `technology_category`)."""
+    out: list[str] = []
+    for t in techs:
+        kind = t.get("kind")
+        if kind == "category":
+            continue
+        out.extend(tech_members(t) if kind == "synthetic" else [t["slug"]])
+    seen: set[str] = set()
+    return [s for s in out if not (s in seen or seen.add(s))]
+
+
+def expand_tech_categories(techs: list[dict]) -> list[str]:
+    """Every predefined technology_category slug implied by `techs`, order-preserved
+    and deduped: `kind == 'category'` entries plus the `member_categories` absorbed
+    by each synthetic category."""
+    out: list[str] = []
+    for t in techs:
+        kind = t.get("kind")
+        if kind == "category":
+            out.append(t["slug"])
+        elif kind == "synthetic":
+            out.extend(tech_member_categories(t))
+    seen: set[str] = set()
+    return [s for s in out if not (s in seen or seen.add(s))]
+
+
 def tech_clause(techs: list[dict]) -> str:
-    """DSL clause matching any of the techs — individual slugs via `technology IN`
-    and predefined categories (kind == 'category') via `technology_category IN`."""
-    cats = [t["slug"] for t in techs if t.get("kind") == "category"]
-    indiv = [t["slug"] for t in techs if t.get("kind") != "category"]
+    """DSL clause matching any of the techs — individual slugs via `technology IN`,
+    predefined categories (kind == 'category') via `technology_category IN`, and
+    synthetic categories (kind == 'synthetic') by expanding their member slugs
+    into the individual `technology IN` list and their absorbed
+    `member_categories` into the `technology_category IN` list."""
+    cats = expand_tech_categories(techs)
+    indiv = expand_tech_slugs(techs)
     parts = []
     if indiv:
         parts.append(f"technology IN {_in_list(indiv)}")
@@ -173,6 +322,42 @@ def tech_clause(techs: list[dict]) -> str:
     if not parts:
         return ""
     return parts[0] if len(parts) == 1 else "(" + " OR ".join(parts) + ")"
+
+
+def tech_query(t: dict) -> str:
+    """DSL term matching ONE ICP tech, whichever kind it is:
+      plain      -> `technology EQ 'slug'`
+      category   -> `technology_category EQ 'slug'`
+      synthetic  -> the authored membership union (`synthetic_tech_query`)
+    """
+    kind = t.get("kind")
+    if kind == "synthetic":
+        return synthetic_tech_query(t)
+    if kind == "category":
+        return f"technology_category EQ {_q(t['slug'])}"
+    return f"technology EQ {_q(t['slug'])}"
+
+
+def tech_entity(t: dict) -> dict[str, Any]:
+    """How ONE ICP tech is selected on the endpoint: `{type, term, granularity}`.
+
+    ALL three kinds go out as `advanced_query`, so every tech has one column
+    shape (`{slug}_teams`, `{slug}_jobs`) and one metric set. This is the single
+    place mapping a spec tech to an entity selection, so `entity_plan` (what we
+    fetch) and `build_weights` (what the config records) can never disagree.
+
+    Why advanced_query for a PREDEFINED category too, rather than the
+    `technology_category` type: only `advanced_query` supports
+    `job_post_concentration`, the same-scope concentration metric the score needs
+    (the `technology_category` type does not). It costs nothing semantically —
+    the endpoint implements a `technology_category` aggregate by building exactly
+    `technology_category EQ '<slug>'` and running it through the same
+    advanced-query counter, so the deduped counts are identical.
+
+    `granularity` is None for every kind: it is valid only on the
+    `technology_category` TYPE and the endpoint rejects it on advanced_query.
+    """
+    return {"type": "advanced_query", "term": tech_query(t), "granularity": None}
 
 
 def intent_tech_query(project_slug: str, techs: list[dict]) -> str:
@@ -209,6 +394,19 @@ def entity_plan(spec: dict, since: str | None = None) -> list[dict[str, Any]]:
                 "since": None,
             }
         )
+        # Native same-scope concentration (people in function / people in org,
+        # both hierarchy rollups) — the denominator the score actually needs.
+        # `build_data_row` inverts it to recover that denominator.
+        plan.append(
+            {
+                "col": f"{p['slug']}_people_conc",
+                "type": "job_function",
+                "term": p["name"],
+                "metric": "people_concentration",
+                "scale": 1.0,
+                "since": None,
+            }
+        )
         plan.append(
             {
                 "col": f"{p['slug']}_growth_yoy",
@@ -220,16 +418,36 @@ def entity_plan(spec: dict, since: str | None = None) -> list[dict[str, Any]]:
             }
         )
     for t in techs:
-        is_cat = t.get("kind") == "category"
+        ent = tech_entity(t)
         plan.append(
             {
                 "col": f"{t['slug']}_teams",
-                "type": "technology_category" if is_cat else "technology",
-                "term": t["slug"],
+                **ent,
                 "metric": "team_count",
                 "scale": 1.0,
                 "since": None,
-                "granularity": "aggregate" if is_cat else None,
+            }
+        )
+        # Job posts + their native same-scope concentration. Tech concentration
+        # is a share of HIRING (job posts), not of teams: `job_post_concentration`
+        # is the only concentration metric advanced_query exposes, and both sides
+        # of it are hierarchy-scoped so parent orgs can't blow past 100%.
+        plan.append(
+            {
+                "col": f"{t['slug']}_jobs",
+                **ent,
+                "metric": "job_post_count",
+                "scale": 1.0,
+                "since": None,
+            }
+        )
+        plan.append(
+            {
+                "col": f"{t['slug']}_jobs_conc",
+                **ent,
+                "metric": "job_post_concentration",
+                "scale": 1.0,
+                "since": None,
             }
         )
     if projects:
@@ -327,8 +545,9 @@ def build_data_row(
     # it is a native org tag the endpoint returns in attributes.tags).
     tags = list(attrs.get("tags") or [])
     # employee_count is the endpoint's exact integer headcount (band-string
-    # midpoint only as a legacy fallback). teams_count / jobs_count are org-total
-    # attributes used as concentration denominators and shown as firmographics.
+    # midpoint only as a legacy fallback). teams_count / jobs_count are
+    # record-scoped org attributes, shown as firmographics only — concentration
+    # denominators come from the native concentration metrics instead.
     employee_count = _exact_employee_count(attrs)
     org_teams = int(_f(attrs.get("teams_count")))
     ents = index_entities(resp_row)
@@ -359,22 +578,38 @@ def build_data_row(
         # rather than a hand-built URL.
         row[f"{item['col']}_link"] = ent.get(f"{item['metric']}_url") or ""
 
+    # Concentration signals, from the endpoint's NATIVE concentration metrics.
+    # Both sides of those ratios are hierarchy rollups, so the scope mismatch
+    # that made entity-count / org-attribute shares exceed 100% for holding
+    # companies (Advance: 252 Design teams vs a record-scoped teams_count of 6)
+    # cannot arise. The metrics return a ratio only, so `recover_total` inverts
+    # the best-conditioned one per org to get the denominator `_share` needs.
+    people_total = recover_total(
+        [
+            (_f(row.get(f"{p['slug']}_people")), _f(row.get(f"{p['slug']}_people_conc")))
+            for p in personas
+        ]
+    )
+    # Recovered denominators are kept as columns so a share is always auditable
+    # against the counts beside it.
+    row["people_total_est"] = people_total
     for p in personas:
         people = _f(row.get(f"{p['slug']}_people"))
-        row[f"{p['slug']}_pct"] = (
-            round(100.0 * people / employee_count, 3) if employee_count else 0.0
-        )
+        row[f"{p['slug']}_pct"] = _share(people, people_total)
         # Concentration reuses the persona's /people deep link.
         row[f"{p['slug']}_pct_link"] = row.get(f"{p['slug']}_people_link", "")
-    # Tech team concentration now uses the org-total team count (teams_count
-    # attribute), so it's a true share-of-teams and fully API-reproducible.
+    jobs_total = recover_total(
+        [
+            (_f(row.get(f"{t['slug']}_jobs")), _f(row.get(f"{t['slug']}_jobs_conc")))
+            for t in techs
+        ]
+    )
+    row["jobs_total_est"] = jobs_total
     for t in techs:
-        teams = _f(row.get(f"{t['slug']}_teams"))
-        row[f"{t['slug']}_team_pct"] = (
-            round(100.0 * teams / org_teams, 3) if org_teams else 0.0
-        )
-        # Concentration reuses the tech's /teams deep link.
-        row[f"{t['slug']}_team_pct_link"] = row.get(f"{t['slug']}_teams_link", "")
+        jobs = _f(row.get(f"{t['slug']}_jobs"))
+        row[f"{t['slug']}_job_pct"] = _share(jobs, jobs_total)
+        # Concentration reuses the tech's /jobs deep link (it is a hiring share).
+        row[f"{t['slug']}_job_pct_link"] = row.get(f"{t['slug']}_jobs_link", "")
 
     # Funding columns (only when requested). total/last-round amounts are scored;
     # type/date are display context. Missing values become 0 / "" so the columns

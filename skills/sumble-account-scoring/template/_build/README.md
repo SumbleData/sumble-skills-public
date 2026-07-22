@@ -49,7 +49,10 @@ Policy constants are baked into the scripts, not chosen per run.
   "include_funding": true,
   "personas": [{"slug": "sales", "name": "Sales", "label": "Sales", "tier": "key"}],
   "techs":    [{"slug": "clay", "label": "Clay", "tier": "key"},
-               {"slug": "cloud-data-warehouse", "label": "Cloud Data Warehouse", "tier": "key", "kind": "category"}],
+               {"slug": "cloud-data-warehouse", "label": "Cloud Data Warehouse", "tier": "key", "kind": "category"},
+               {"slug": "syn-gtm-enrichment", "label": "GTM Data Enrichment", "tier": "key",
+                "kind": "synthetic", "members": ["clay", "common-room", "apollo-io"],
+                "member_categories": ["sales-intelligence"]}],
   "projects": [{"slug": "generative-ai", "label": "Generative AI"}],
   "universe_filters": {
     "preselect": "auto",
@@ -79,6 +82,56 @@ Policy constants are baked into the scripts, not chosen per run.
   "data_sources": {"crm_list": {"source": "...", "size": 1200}, "gold_list": {"source": "closed_won", "size": 48}}
 }
 ```
+
+### Tech `kind` — three ways to select one ICP tech
+
+All three produce the same column shape (`{slug}_teams`, `{slug}_jobs`,
+`{slug}_job_pct`) and the same metric set; only the query TERM differs.
+`sumble_v6.tech_entity()` is the single mapping, shared by `entity_plan` (what we
+fetch) and `build_weights` (what the config records), so they cannot drift.
+
+Every kind goes out as an **`advanced_query`** entity with
+`["team_count", "job_post_count", "job_post_concentration"]`:
+
+| `kind` | term | notes |
+|---|---|---|
+| *(absent)* | `technology EQ 'slug'` | one individual technology |
+| `"category"` | `technology_category EQ 'slug'` | a **predefined** Sumble category |
+| `"synthetic"` | `technology IN (members)` OR'd with `technology_category IN (member_categories)` | an **authored** grouping |
+
+All three are counted the same way — a DEDUPED count over the matching set, so a
+team using several members of a category counts once.
+
+**Why advanced_query for a predefined category, rather than the
+`technology_category` entity type:** only `advanced_query` supports
+`job_post_concentration`, the same-scope concentration metric the score needs
+(both sides hierarchy rollups, so a parent org cannot exceed 100%). It costs
+nothing semantically — the endpoint implements a `technology_category` aggregate
+by building exactly `technology_category EQ '<slug>'` and running it through the
+same advanced-query counter. A happy side effect: `granularity` disappears
+entirely (it is valid only on the `technology_category` type, and the endpoint
+422s if sent on an `advanced_query`), so `tech_entity` returns None for all kinds.
+
+A synthetic category is the escape hatch for an ICP that no predefined category
+expresses. It is 100% ICP by construction (no coverage leakage), but breadth
+becomes the author's judgment — see SKILL.md → "Synthetic categories" for the
+guardrails (every member defensibly ICP, no dominating member, each member in
+exactly one category, `syn-` slug prefix, full member list confirmed by the
+user).
+
+A synthetic category takes **two kinds of membership**, and may use either or
+both:
+
+- `members` — individual technology slugs.
+- `member_categories` — whole **predefined** categories it absorbs. Use this to
+  *extend* a predefined category rather than restate it: absorbing
+  `generative-ai-tools` and adding four competitor slugs scores the union as one
+  signal, and stays in sync when Sumble later adds a technology to that
+  category. Hand-expanding the category's members instead would freeze it.
+
+Both membership kinds are expanded wherever the parts are needed individually:
+the whitespace ranking clause, the project×tech buying-window query, and the
+`/teams` deep link (`expand_tech_slugs` / `expand_tech_categories`).
 
 `section_plan` is OPTIONAL — omit it to take the default three-segment taxonomy
 verbatim. When present it overrides segment labels/weights (`sections`), the
@@ -130,10 +183,13 @@ company), NOT a fixed default — the example values are illustrative only.
 
 - `api_supported:true` — reproducible from `POST /v6/organizations`: persona
   counts (`people_count`), persona YoY growth (`people_count_growth_1y`), tech
-  team counts (`team_count`), 3-month intent (`advanced_query` + `since`),
-  persona concentration (`people_count ÷ employee_count`, exact integer), and
-  **tech concentration** (`{tech}_team_pct` = `team_count ÷ teams_count`, the
-  org-total team count attribute).
+  team counts (`team_count`), tech job posts (`job_post_count`), 3-month intent
+  (`advanced_query` + `since`), and both **concentrations** — persona
+  (`{jf}_pct`, from the native `people_concentration`) and tech hiring
+  (`{tech}_job_pct`, from the native `job_post_concentration`). Each
+  concentration is reported as the Wilson 95% lower bound over a denominator
+  recovered from the ratio; see `sumble_v6.recover_total` for why that recovery
+  is a temporary workaround.
 - `api_supported:false` — **first-party signals only** (joined by account, not
   from Sumble). The portable `score_accounts.py` drops these and re-normalises
   the remaining weights.

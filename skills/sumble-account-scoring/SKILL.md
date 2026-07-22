@@ -216,7 +216,7 @@ referenced from `account-scoring-weights.json` so `app.py` is generic.
 - `industry` (str) — `attributes.industry`
 - `employee_count_int` (int) — the org's **exact** headcount, read from the `attributes.employee_count` attribute, which the endpoint now returns as an exact integer (e.g. `2615`). A legacy band string (`"1,001 - 5,000"`) maps to its midpoint via `sumble_v6.emp_band_to_int`; missing → 0.
 - `jobs_count` (int) — org-total job-post count (`attributes.jobs_count`); firmographic.
-- `teams_count` (int) — org-total team count (`attributes.teams_count`); the denominator for tech-team concentration (`{tech}_team_pct = 100 * {tech}_teams / teams_count`).
+- `teams_count` (int) — org-total team count (`attributes.teams_count`); firmographic only. It is **record-scoped** (the matched org alone, not its subsidiaries) so it is NOT used as a concentration denominator — see the concentration note under "ICP signal columns".
 
 **CRM linkage:**
 - `crm_account_id` (str, nullable) — internal CRM / Salesforce id, carried through from `_raw/sample.csv` (Branch A only). Kept in `data.csv` (NOT shown in the app, since duplicated CRM records would surface the same Sumble org multiple times).
@@ -282,9 +282,47 @@ a `flag` column (above) OR membership in the `tags` column.
 slugs):
 - Persona count `{jf}_people` (int); concentration `{jf}_pct` (0–100);
   YoY % growth `{jf}_growth_yoy` (float, e.g. `0.20` = +20%).
-- Tech team counts `{tech}_teams` (int, individual tech or category);
-  tech team concentration `{tech}_team_pct` = `100 * {tech}_teams /
-  NULLIF(organizations.teams_count, 0)` (0–100).
+- Tech team counts `{tech}_teams` (int, any tech kind); tech job posts
+  `{tech}_jobs` (int); tech **hiring** concentration `{tech}_job_pct` (0–100).
+
+  **Concentration comes from the endpoint's NATIVE metrics, not from dividing by
+  an org attribute.** `{jf}_pct` is built on `people_concentration` (job_function
+  entities) and `{tech}_job_pct` on `job_post_concentration` (advanced_query
+  entities). Both sides of those ratios are hierarchy rollups, so the scope
+  mismatch that used to break parent orgs cannot arise: Advance returns 252
+  Design teams / 645 Design job posts across its subsidiaries against a
+  record-scoped `teams_count` of 6, which as a naive ratio read "4200% of teams".
+  Note this makes tech concentration a share of **hiring**, not of teams —
+  `job_post_concentration` is the only concentration metric `advanced_query`
+  exposes, and it is the same measure as the product's own concentration sort.
+
+  **Reported as the Wilson 95% lower confidence bound** (`sumble_v6._share`,
+  `CONFIDENCE_Z=1.96`) — the lowest share that could plausibly explain what was
+  observed. A raw ratio scores 1/1 and 900/900 identically at "100%", so orgs we
+  know almost nothing about saturate the signal: on a 4,884-row pull 192 orgs
+  read ≥99% design share with a MEDIAN denominator of **1**. The p99 normaliser
+  then fits to those and a well-measured org's genuine 7% share normalises to
+  ~0.07 — the signal ends up ranking how LITTLE data an org has. The bound
+  shrinks thin evidence toward 0 (1/1 → 21%, 9/9 → 70%) while leaving
+  well-measured orgs essentially alone (266/3630 → 6.5%, raw 7.3%). **Don't
+  recommend "raise the Concentration slider" without checking the denominator
+  distribution first.**
+
+  **Denominator recovery is a known WORKAROUND** (`sumble_v6.recover_total`,
+  mirrored in `score_accounts.recover_totals`). The concentration metrics return
+  a ratio only, but the Wilson bound needs the sample size, so the denominator is
+  inverted out: `denominator = count / ratio`. The ratio is rounded to 4dp, so
+  precision degrades as the share shrinks (at a 0.02% share the recovered total
+  is ~25% off; below ~0.005% the ratio rounds to `0.0` and is unrecoverable).
+  Every persona shares ONE org-wide denominator and every tech shares ONE, so it
+  is recovered a single time per org from the LARGEST count available and reused
+  — a tech with 500 posts at `0.0250` pins the total to 20,000 ±0.2%. The
+  recovered totals are kept as `people_total_est` / `jobs_total_est` so any share
+  is auditable against the counts beside it. **Delete this once
+  `/v6/organizations` exposes hierarchy-scoped counts as attributes**
+  (`hp_jobs_count` / `hp_people_count` / `hp_teams_count` already exist on the
+  `organizations` table; flagged to the API team) — then numerator and
+  denominator both arrive directly, at full precision.
 
 **Buying-window columns** (always present) — one per key project:
 `{project}_x_relevant_tech_jobposts` (Template C5). The relevant tech set
@@ -403,31 +441,59 @@ the last time it was shown, re-print the whole updated list, not a diff.
    user confirms the FINAL shape, not raw techs that change in Stage 2a.**
    First snap every proposed tech to its slug (`SearchTechnologies`), then run
    the category roll-up (the procedure + SQL in Stage 2a → "Roll individual
-   techs up into predefined categories"). Present the ICP with the rolled-up
-   **categories** in place of their absorbed individual techs (showing each
-   category's coverage% and the techs it absorbs), and the unabsorbed techs as
-   individuals. This is just early invocation of the Stage 2a logic; Stage 2a
-   then only persists the already-confirmed result to `spec.json`.
+   techs up into predefined categories"), then the grouping pass (Stage 2a →
+   "Group every tech"). Present the ICP with **categories** in place of their
+   absorbed individual techs (showing each category's coverage% and the techs it
+   absorbs). This is just early invocation of the Stage 2a logic; Stage 2a then
+   only persists the already-confirmed result to `spec.json`.
+
+   **Present GROUPS, not a pile of individual techs.** Every proposed tech
+   should arrive inside a predefined or synthetic category; a standalone tech is
+   the exception you justify, not the default (Stage 2a → "Group every tech"
+   has the ordering). Sparse niche techs scored one-by-one mostly read 0 and
+   double-count the same team across signals.
+
+   **When no predefined category fits, author a SYNTHETIC one** (Stage 2a →
+   "Synthetic categories") — an ICP-specific grouping scored as one deduped
+   `team_count`. This is the common case for niche ICPs, where the
+   competitor/practitioner tools are individually sparse and Sumble has no
+   category for them. A synthetic category can **absorb a whole predefined
+   category** (`member_categories`) and extend it with extra slugs (`members`) —
+   the right move when a predefined category is close but incomplete. It may
+   also pull in **relevant techs the original ICP list never mentioned** (that's
+   the point — you're defining the capability, not just regrouping) — so
+   discover them first (`SearchTechnologies` / a `technologies` query for
+   mention volume), then obey the guardrails in Stage 2a: every member
+   defensibly ICP, no dominating member, each member in exactly one category,
+   `syn-` slug prefix. **Print the FULL membership with per-member mention
+   volume in the confirmation message** — the user approves membership before a
+   single credit is spent.
 
    Present as **ONE** compact markdown summary + a single yes/edit prompt
    (no multi-selects, no per-category questions); loop on edits until
    accepted. **The summary must be COMPLETE — every element of the ICP the
    pipeline will fetch, with nothing elided:** all personas with key/other
-   tiers; every technology category with its coverage% and the full list of
-   absorbed techs; every individual tech with its tier; every project; and
+   tiers; every predefined technology category with its coverage% and the full
+   list of absorbed techs; every synthetic category with its COMPLETE
+   membership (absorbed categories AND member slugs); every standalone tech
+   with its tier **and why it was left standalone**; every project; and
    whether funding attributes are scored (`Funding: on/off`, per the funding
    question below). Render it in the message itself (see the Confirmation rule above
    — never rely on question-widget option labels to carry the list). Example:
    ```
    Proposed ICP for <company>:
      • Personas (key): Sales, RevOps · (other): Marketing
-     • Technology categories: Inference & Serving (31% — absorbs vllm,
-       baseten, modal, replicate)
-     • Technologies (individual): clay (key), common-room (key),
-       hg-insights (other), zoominfo (other)
+     • Technology categories (predefined): Inference & Serving (31% — absorbs
+       vllm, baseten, modal, replicate)
+     • Technology categories (synthetic): GTM Data Enrichment (key) — absorbs
+       category Sales Intelligence, plus clay (12K), common-room (3K),
+       apollo-io (9K)
+     • Technologies (standalone): acme-cloud (key) — our own product, kept
+       separate so you can weight existing-usage accounts on their own
      • Projects: Generative AI, Digital Transformation
    Reply "yes", or describe changes (e.g. "drop marketing, add SDR",
-   "split out vllm from Inference & Serving").
+   "split out vllm from Inference & Serving", "drop zoominfo from GTM Data
+   Enrichment — it dominates the category").
    ```
 
    **Also confirm the buying-window combinations**
@@ -840,7 +906,10 @@ broader than the ICP, so prefer the individual techs. Apply the rules:
   category (no double-counting).
 - **Suggest a category** (replace its absorbed individual techs with one
   `{"slug": <cat>, "kind": "category"}` entry) only when it absorbs **≥2** ICP
-  techs. Keep unabsorbed techs as individual `{"slug": …}` entries.
+  techs.
+- **Then sweep up whatever is left — do NOT stop here with a pile of orphan
+  individual techs.** Unabsorbed techs are the *input* to the grouping pass
+  below, not the output. Run "Group every tech" before presenting.
 - Present the proposed rollups as part of the Q2 ICP confirmation (category,
   coverage%, the techs it absorbs) and loop on the user's edits — the user
   confirms categories, not the raw pre-rollup techs.
@@ -850,10 +919,131 @@ pipeline handles `kind: "category"` end to end — the endpoint enrichment
 (`technology_category` + `granularity: aggregate`), the whitespace ranking
 (`technology_category IN`), the score signal, and `score_accounts.py`.
 
+##### Synthetic categories — when no predefined category fits
+
+Sumble's predefined categories are general-purpose; a specific ICP often has no
+category that expresses it (there is no "Offensive Security Tooling" category,
+no "Autonomous Pentest Competitors" category). When the roll-up above yields
+nothing usable — every candidate is below the 2% bar, absorbs <2 ICP techs, or
+is far broader than the ICP — author a **synthetic category** instead:
+
+```json
+{"slug": "syn-offensive-security", "label": "Offensive Security Tooling",
+ "tier": "key", "kind": "synthetic",
+ "members": ["burp-suite", "metasploit", "nmap", "kali-linux"]}
+```
+
+It is sent as an `advanced_query` entity, `technology IN (members)`, read as
+`team_count` — the SAME counter the endpoint uses for a predefined category
+aggregate, so a team using three members still **counts once**. (Verified: for
+Deloitte the four members above sum to 187 team-counts individually but the
+synthetic category returns 79.)
+
+**Why reach for one.** Individual competitor/niche techs are sparse — most orgs
+score 0 on each, so N sparse signals mostly contribute noise and, worse,
+double-count the same team across members. One synthetic category is denser,
+deduped, and reads as the *capability* you actually care about.
+
+**Synthetic vs predefined — the tradeoff flips.** A predefined category counts
+the whole category including techs never in the ICP, which is what
+`icp_coverage_pct` measures. A synthetic category is **100% ICP by
+construction** (you authored every member), so there is no coverage leakage —
+but the breadth judgment moves from Sumble to you. That shifts the risk rather
+than removing it, so:
+
+- **Every member must be defensibly ICP on its own.** If you would not have put
+  the tech in the ICP individually, it does not belong in the category.
+- **Watch for a dominating member — then ask WHY it dominates.** The signal is a
+  deduped union, so a member far more common than the rest largely determines
+  it. Pull `total_mentions` per member; when the largest is ≳10× the median,
+  stop and judge:
+  - **Conceptually broader than the category → drop it.** It drags the signal
+    onto a different population. Putting `sonarqube` (~123K) in a pentest
+    category alongside `pentesting` (~1K) makes the signal track code-quality
+    tooling; `wireshark` (~83K) makes it track network engineering.
+  - **Core to the category → keep it, and say so.** `burp-suite` (~26K) towers
+    over `pentesting` (~1K) but IS the definitive pentest tool — the ratio just
+    reflects how practitioners talk. Note in the confirmation that the category
+    will read roughly as "burp-suite plus a margin", so the user is not
+    surprised when it correlates with that one tech.
+  Volume ratio is the flag; conceptual breadth is the test.
+- **Reject ambiguous slugs.** A synthetic category is a bare `technology IN`
+  list with no disambiguation, so a slug whose name collides with something
+  outside the ICP silently imports the wrong orgs. Check every member's name in
+  isolation and drop the ambiguous ones — e.g. `hydra` (pentest brute-forcer,
+  but also Meta's Python config framework), `nuclei`, `responder`, `sliver`,
+  `intruder`, `cobalt` (the PtaaS vendor vs. the metal/`cobalt-strike`). Prefer
+  the unambiguous long name when one exists (`cobalt-strike` over `cobalt`).
+- **Assign each member to exactly ONE synthetic category** — same
+  no-double-counting discipline as the predefined roll-up. Overlapping
+  categories double-weight the same teams.
+- **Aim for 3–15 members.** Fewer than 3 is just individual techs with extra
+  indirection; a very long tail adds breadth you cannot defend member by member.
+- **Prefix the slug `syn-`** so it cannot collide with a real technology slug
+  (the slug names the `{slug}_teams` / `{slug}_jobs` / `{slug}_job_pct` columns).
+- **Show the FULL member list at Q2 confirmation** — the Confirmation rule
+  applies: print every member of every synthetic category, with each member's
+  mention volume, and let the user add/remove before anything is fetched. The
+  member list is also written into the config's `source.why`, so the score stays
+  auditable afterwards.
+
+##### Group every tech — a standalone individual tech is the LAST resort
+
+**Default to grouping. Do not present a list of orphan individual techs.** A
+lone niche tech is a sparse signal: most orgs read 0, so it contributes mostly
+noise, it burns a slider on something that rarely moves, and several such techs
+silently double-count the same team across signals. Grouping fixes all three at
+once. After the predefined roll-up, take every still-ungrouped tech and resolve
+it in this order — stop at the first that applies:
+
+1. **Fold it into a predefined category you already selected**, if it is a
+   member. Free, maintained by Sumble, no judgment required.
+2. **Extend a selected predefined category with a synthetic one.** When the
+   category is right but incomplete — it covers four of your competitors and
+   misses three — author a synthetic category that absorbs the whole category
+   via `member_categories` and adds the missing slugs via `members`. This is
+   strictly better than hand-expanding the category's members: the signal stays
+   in sync when Sumble adds a technology to that category.
+   ```json
+   {"slug": "syn-gen-image", "label": "Generative Image Generation (extended)",
+    "tier": "key", "kind": "synthetic",
+    "member_categories": ["generative-ai-tools"],
+    "members": ["ideogram-ai", "black-forest-labs", "comfyui", "krea-ai"]}
+   ```
+3. **Author a new synthetic category** grouping the leftovers by the *capability*
+   they represent. **Actively recruit additional techs that belong to that
+   capability even if the ICP never named them** — you are defining a capability,
+   not just regrouping a list. Discover them with `SearchTechnologies` or a
+   `technologies` mention-volume query, then apply the guardrails above.
+4. **Leave it standalone** only when it genuinely stands alone — a tech that is
+   both central to the ICP and not a member of any defensible group. **Your own
+   product is the usual legitimate case** (e.g. `ideogram-ai` for Ideogram):
+   accounts already mentioning you are a distinct signal you may want to see and
+   weight on its own rather than blended into a competitor set. When you leave a
+   tech standalone, **say why in the confirmation message** so the user can
+   overrule it.
+
+Two grouping errors to avoid. **Don't force unlike things together** to satisfy
+the rule — a group must name a capability a buyer would recognize, not "the
+remaining techs". And **don't group away a signal the user wants to steer on**:
+if a tech is one they will plausibly want to up- or down-weight by itself, ask
+before absorbing it.
+
+Prefer a predefined category when one genuinely fits (it is maintained by Sumble
+and needs no judgment); reach for synthetic when none does, or when a predefined
+one is close but incomplete. All three kinds can coexist in one spec.
+
+The pipeline handles `kind: "synthetic"` end to end — enrichment
+(`advanced_query`), the whitespace ranking and the project×tech buying-window
+query (`members` expanded into the `technology IN` list, `member_categories`
+into the `technology_category IN` list), the `/teams` deep link (one OR group
+over both), and `score_accounts.py`.
+
 Write **`_raw/spec.json`** (schema: `template/_build/README.md`). Personas carry
 `{slug, name, tier, label}` (`name` is the endpoint term), techs
-`{slug, label, tier[, kind:"category"]}`, projects `{slug,…}`. Show the resolved
-set back to the user before fetching.
+`{slug, label, tier[, kind:"category"|"synthetic", members:[…],
+member_categories:[…]]}`, projects
+`{slug,…}`. Show the resolved set back to the user before fetching.
 
 #### Stage 2b — Write the input list
 

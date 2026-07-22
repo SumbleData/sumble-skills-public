@@ -9,9 +9,10 @@
       "first_party": "joined in by account; not from Sumble."
     },
     "api_block": "source.api = {endpoint, select_entity|select_attribute, read, extract}. select_entity is the exact select.entities[] item to send; read is the metric to take off the EntityResult. since entities are a 3-month window the scorer recomputes to (run date \u2212 3 months).",
-    "api_supported": "true if score_accounts.py can reproduce the column from the public API. false (tech concentration) stays in the app for tuning but is dropped + weight-renormalised by the portable scorer."
+    "api_supported": "true if score_accounts.py can reproduce the column from the public API. false (first-party signals only) stays in the app for tuning but is dropped + weight-renormalised by the portable scorer.",
+    "concentration": "Concentration columns come from the endpoint's native same-scope metrics (people_concentration / job_post_concentration), reported as the Wilson 95% lower bound over a denominator recovered as count / ratio \u2014 recovered once per org from the largest count. See sumble_v6.recover_total; that recovery is a temporary workaround pending hierarchy-scoped count attributes on /v6/organizations."
   },
-  "saved_at": "2026-05-31T04:43:19+00:00",
+  "saved_at": "2026-07-22T14:05:05+00:00",
   "customer_name": "Acme \u2014 Scoring",
   "score_label": "Account Score",
   "id_column": "org_id",
@@ -21,91 +22,70 @@
   "data_csv": "data.csv",
   "table_columns": [
     "name",
-    "crm_account_id",
     "url",
     "employee_count_int",
-    "headquarters_country"
+    "__section:acv",
+    "__section:intent"
   ],
-  "data_sources": {
-    "sumble": {
-      "via": "Sumble unified endpoint POST /v6/organizations"
-    },
-    "crm_account_universe": {
-      "included": true,
-      "via": "Salesforce MCP",
-      "object": "Account"
-    },
-    "icp_gold": {
-      "included": true,
-      "via": "Salesforce MCP",
-      "object": "Opportunity",
-      "filter": "StageName = 'Closed Won'"
-    },
-    "first_party_signals": {
-      "included": true,
-      "notes": "PLG + marketing + 3P intent joined by account domain."
-    }
-  },
+  "data_sources": {},
   "sections": {
     "acv": {
       "label": "ACV (size + fit)",
-      "default_pct": 60
+      "default_pct": 60.0
     },
     "intent": {
       "label": "Intent (buying window)",
-      "default_pct": 40
+      "default_pct": 40.0
     }
   },
   "categories": {
     "icp_persona_count": {
-      "label": "Icp Persona Count",
+      "label": "Persona headcount",
       "section": "acv",
-      "default_pct": 39.0
-    },
-    "icp_persona_growth": {
-      "label": "Icp Persona Growth",
-      "section": "acv",
-      "default_pct": 16.25
-    },
-    "icp_persona_concentration": {
-      "label": "Icp Persona Concentration",
-      "section": "acv",
-      "default_pct": 9.75
+      "default_pct": 16.3636
     },
     "relevant_tech_team_count": {
-      "label": "Relevant Tech Team Count",
+      "label": "Tech teams",
       "section": "acv",
-      "default_pct": 24.5
-    },
-    "relevant_tech_team_concentration": {
-      "label": "Relevant Tech Team Concentration",
-      "section": "acv",
-      "default_pct": 10.5
+      "default_pct": 10.9091
     },
     "intent_project_tech_count": {
-      "label": "Intent Project Tech Count",
+      "label": "Project \u00d7 tech",
       "section": "intent",
-      "default_pct": 45.0
+      "default_pct": 37.5
     },
-    "intent_project_persona_count": {
-      "label": "Intent Project Persona Count",
-      "section": "intent",
-      "default_pct": 30.0
+    "icp_persona_concentration": {
+      "label": "Persona concentration",
+      "section": "acv",
+      "default_pct": 21.8182,
+      "clone_from": "icp_persona_count"
+    },
+    "relevant_tech_job_concentration": {
+      "label": "Tech hiring concentration",
+      "section": "acv",
+      "default_pct": 14.5455,
+      "clone_from": "relevant_tech_team_count"
+    },
+    "icp_persona_growth": {
+      "label": "Persona growth (YoY)",
+      "section": "acv",
+      "default_pct": 36.3636,
+      "clone_from": "icp_persona_count"
     },
     "product_usage": {
       "label": "Product / PLG usage",
       "section": "intent",
-      "default_pct": 10.0
+      "default_pct": 25.0
     },
     "marketing_engagement": {
       "label": "Marketing engagement",
       "section": "intent",
-      "default_pct": 10.0
+      "default_pct": 25.0
     },
     "third_party_intent": {
       "label": "Third-party intent",
       "section": "intent",
-      "default_pct": 5.0
+      "default_pct": 12.5
     }
   },
   "signals": {
@@ -154,7 +134,8 @@
         "why": "Concentration filters out big orgs with a Sales per division.",
         "kind": "sumble_derived",
         "derivation": {
-          "formula": "100 * sales_people / employee_count_int",
+          "formula": "wilson_lb_pct(sales_people, round(sales_people / sales_people_conc))",
+          "note": "people_concentration is the endpoint's native same-scope share (people in function / people in org, both hierarchy rollups). It returns a ratio only, so the denominator is recovered by inversion \u2014 once per org from the persona with the largest headcount \u2014 and the reported value is the Wilson 95% lower bound so a 1-of-1 org cannot read 100%.",
           "inputs": [
             {
               "name": "sales_people",
@@ -169,10 +150,16 @@
               "read": "people_count"
             },
             {
-              "name": "employee_count_int",
+              "name": "sales_people_conc",
               "endpoint": "POST https://api.sumble.com/v6/organizations",
-              "select_attribute": "employee_count",
-              "read": "exact org headcount (employee_count is an integer; legacy band strings map to a midpoint)"
+              "select_entity": {
+                "type": "job_function",
+                "term": "Sales",
+                "metrics": [
+                  "people_concentration"
+                ]
+              },
+              "read": "people_concentration"
             }
           ]
         }
@@ -203,6 +190,7 @@
           "transform_note": "endpoint returns a percent (e.g. 50.0); data.csv stores it as a ratio (\u00d7 0.01)."
         }
       },
+      "fmt": "pct",
       "sumble_link": {
         "path": "/trends/job_functions_people",
         "filters": {
@@ -212,115 +200,12 @@
         }
       }
     },
-    "icp_persona_count_marketing": {
-      "label": "Marketing headcount",
-      "column": "marketing_people",
-      "category": "icp_persona_count",
-      "transform": "log",
-      "default_within": 33.33,
-      "p99": 1.0,
-      "api_supported": true,
-      "source": {
-        "why": "Marketing is a target persona \u2014 more Marketings = bigger ACV.",
-        "kind": "sumble_api",
-        "api": {
-          "endpoint": "POST https://api.sumble.com/v6/organizations",
-          "select_entity": {
-            "type": "job_function",
-            "term": "Marketing",
-            "metrics": [
-              "people_count"
-            ]
-          },
-          "read": "people_count",
-          "extract": "organizations[].entities[type='job_function',term='Marketing'].people_count"
-        }
-      },
-      "sumble_link": {
-        "path": "/people",
-        "filters": {
-          "job_function": [
-            "Marketing"
-          ]
-        }
-      }
-    },
-    "icp_persona_concentration_marketing": {
-      "label": "Marketing % of company",
-      "column": "marketing_pct",
-      "category": "icp_persona_concentration",
-      "transform": "linear",
-      "default_within": 33.33,
-      "p99": 1.0,
-      "api_supported": true,
-      "source": {
-        "why": "Concentration filters out big orgs with a Marketing per division.",
-        "kind": "sumble_derived",
-        "derivation": {
-          "formula": "100 * marketing_people / employee_count_int",
-          "inputs": [
-            {
-              "name": "marketing_people",
-              "endpoint": "POST https://api.sumble.com/v6/organizations",
-              "select_entity": {
-                "type": "job_function",
-                "term": "Marketing",
-                "metrics": [
-                  "people_count"
-                ]
-              },
-              "read": "people_count"
-            },
-            {
-              "name": "employee_count_int",
-              "endpoint": "POST https://api.sumble.com/v6/organizations",
-              "select_attribute": "employee_count",
-              "read": "exact org headcount (employee_count is an integer; legacy band strings map to a midpoint)"
-            }
-          ]
-        }
-      }
-    },
-    "icp_persona_growth_marketing": {
-      "label": "Marketing YoY growth",
-      "column": "marketing_growth_yoy",
-      "category": "icp_persona_growth",
-      "transform": "linear",
-      "default_within": 33.33,
-      "p99": 1.0,
-      "api_supported": true,
-      "source": {
-        "why": "Persona growth is a buying-window proxy \u2014 orgs growing Marketing are scaling that function.",
-        "kind": "sumble_api",
-        "api": {
-          "endpoint": "POST https://api.sumble.com/v6/organizations",
-          "select_entity": {
-            "type": "job_function",
-            "term": "Marketing",
-            "metrics": [
-              "people_count_growth_1y"
-            ]
-          },
-          "read": "people_count_growth_1y",
-          "extract": "organizations[].entities[type='job_function',term='Marketing'].people_count_growth_1y",
-          "transform_note": "endpoint returns a percent (e.g. 50.0); data.csv stores it as a ratio (\u00d7 0.01)."
-        }
-      },
-      "sumble_link": {
-        "path": "/trends/job_functions_people",
-        "filters": {
-          "job_function": [
-            "Marketing"
-          ]
-        }
-      }
-    },
     "icp_persona_count_revops": {
       "label": "RevOps headcount",
       "column": "revops_people",
       "category": "icp_persona_count",
       "transform": "log",
-      "default_within": 32.66,
+      "default_within": 33.33,
       "p99": 1.0,
       "api_supported": true,
       "source": {
@@ -353,14 +238,15 @@
       "column": "revops_pct",
       "category": "icp_persona_concentration",
       "transform": "linear",
-      "default_within": 32.66,
+      "default_within": 33.33,
       "p99": 1.0,
       "api_supported": true,
       "source": {
         "why": "Concentration filters out big orgs with a RevOps per division.",
         "kind": "sumble_derived",
         "derivation": {
-          "formula": "100 * revops_people / employee_count_int",
+          "formula": "wilson_lb_pct(revops_people, round(revops_people / revops_people_conc))",
+          "note": "people_concentration is the endpoint's native same-scope share (people in function / people in org, both hierarchy rollups). It returns a ratio only, so the denominator is recovered by inversion \u2014 once per org from the persona with the largest headcount \u2014 and the reported value is the Wilson 95% lower bound so a 1-of-1 org cannot read 100%.",
           "inputs": [
             {
               "name": "revops_people",
@@ -375,10 +261,16 @@
               "read": "people_count"
             },
             {
-              "name": "employee_count_int",
+              "name": "revops_people_conc",
               "endpoint": "POST https://api.sumble.com/v6/organizations",
-              "select_attribute": "employee_count",
-              "read": "exact org headcount (employee_count is an integer; legacy band strings map to a midpoint)"
+              "select_entity": {
+                "type": "job_function",
+                "term": "Revenue Operations",
+                "metrics": [
+                  "people_concentration"
+                ]
+              },
+              "read": "people_concentration"
             }
           ]
         }
@@ -389,7 +281,7 @@
       "column": "revops_growth_yoy",
       "category": "icp_persona_growth",
       "transform": "linear",
-      "default_within": 32.66,
+      "default_within": 33.33,
       "p99": 1.0,
       "api_supported": true,
       "source": {
@@ -409,11 +301,123 @@
           "transform_note": "endpoint returns a percent (e.g. 50.0); data.csv stores it as a ratio (\u00d7 0.01)."
         }
       },
+      "fmt": "pct",
       "sumble_link": {
         "path": "/trends/job_functions_people",
         "filters": {
           "job_function": [
             "Revenue Operations"
+          ]
+        }
+      }
+    },
+    "icp_persona_count_marketing": {
+      "label": "Marketing headcount",
+      "column": "marketing_people",
+      "category": "icp_persona_count",
+      "transform": "log",
+      "default_within": 32.66,
+      "p99": 1.0,
+      "api_supported": true,
+      "source": {
+        "why": "Marketing is a target persona \u2014 more Marketings = bigger ACV.",
+        "kind": "sumble_api",
+        "api": {
+          "endpoint": "POST https://api.sumble.com/v6/organizations",
+          "select_entity": {
+            "type": "job_function",
+            "term": "Marketing",
+            "metrics": [
+              "people_count"
+            ]
+          },
+          "read": "people_count",
+          "extract": "organizations[].entities[type='job_function',term='Marketing'].people_count"
+        }
+      },
+      "sumble_link": {
+        "path": "/people",
+        "filters": {
+          "job_function": [
+            "Marketing"
+          ]
+        }
+      }
+    },
+    "icp_persona_concentration_marketing": {
+      "label": "Marketing % of company",
+      "column": "marketing_pct",
+      "category": "icp_persona_concentration",
+      "transform": "linear",
+      "default_within": 32.66,
+      "p99": 1.0,
+      "api_supported": true,
+      "source": {
+        "why": "Concentration filters out big orgs with a Marketing per division.",
+        "kind": "sumble_derived",
+        "derivation": {
+          "formula": "wilson_lb_pct(marketing_people, round(marketing_people / marketing_people_conc))",
+          "note": "people_concentration is the endpoint's native same-scope share (people in function / people in org, both hierarchy rollups). It returns a ratio only, so the denominator is recovered by inversion \u2014 once per org from the persona with the largest headcount \u2014 and the reported value is the Wilson 95% lower bound so a 1-of-1 org cannot read 100%.",
+          "inputs": [
+            {
+              "name": "marketing_people",
+              "endpoint": "POST https://api.sumble.com/v6/organizations",
+              "select_entity": {
+                "type": "job_function",
+                "term": "Marketing",
+                "metrics": [
+                  "people_count"
+                ]
+              },
+              "read": "people_count"
+            },
+            {
+              "name": "marketing_people_conc",
+              "endpoint": "POST https://api.sumble.com/v6/organizations",
+              "select_entity": {
+                "type": "job_function",
+                "term": "Marketing",
+                "metrics": [
+                  "people_concentration"
+                ]
+              },
+              "read": "people_concentration"
+            }
+          ]
+        }
+      }
+    },
+    "icp_persona_growth_marketing": {
+      "label": "Marketing YoY growth",
+      "column": "marketing_growth_yoy",
+      "category": "icp_persona_growth",
+      "transform": "linear",
+      "default_within": 32.66,
+      "p99": 1.0,
+      "api_supported": true,
+      "source": {
+        "why": "Persona growth is a buying-window proxy \u2014 orgs growing Marketing are scaling that function.",
+        "kind": "sumble_api",
+        "api": {
+          "endpoint": "POST https://api.sumble.com/v6/organizations",
+          "select_entity": {
+            "type": "job_function",
+            "term": "Marketing",
+            "metrics": [
+              "people_count_growth_1y"
+            ]
+          },
+          "read": "people_count_growth_1y",
+          "extract": "organizations[].entities[type='job_function',term='Marketing'].people_count_growth_1y",
+          "transform_note": "endpoint returns a percent (e.g. 50.0); data.csv stores it as a ratio (\u00d7 0.01)."
+        }
+      },
+      "fmt": "pct",
+      "sumble_link": {
+        "path": "/trends/job_functions_people",
+        "filters": {
+          "job_function": [
+            "Marketing"
           ]
         }
       }
@@ -427,19 +431,19 @@
       "p99": 1.0,
       "api_supported": true,
       "source": {
-        "why": "Teams using Clay prove active, in-production adoption.",
+        "why": "Teams using the Clay tool prove active, in-production adoption.",
         "kind": "sumble_api",
         "api": {
           "endpoint": "POST https://api.sumble.com/v6/organizations",
           "select_entity": {
-            "type": "technology",
-            "term": "clay",
+            "type": "advanced_query",
+            "term": "technology EQ 'clay'",
             "metrics": [
               "team_count"
             ]
           },
           "read": "team_count",
-          "extract": "organizations[].entities[type='technology',term='clay'].team_count"
+          "extract": "organizations[].entities[type='advanced_query',term=\"technology EQ 'clay'\"].team_count"
         }
       },
       "sumble_link": {
@@ -451,38 +455,53 @@
         }
       }
     },
-    "relevant_tech_team_concentration_clay": {
-      "label": "Clay team share",
-      "column": "clay_team_pct",
-      "category": "relevant_tech_team_concentration",
+    "relevant_tech_job_concentration_clay": {
+      "label": "Clay share of hiring",
+      "column": "clay_job_pct",
+      "category": "relevant_tech_job_concentration",
       "transform": "linear",
       "default_within": 32.04,
       "p99": 1.0,
       "api_supported": true,
       "source": {
-        "why": "% of teams using Clay signals broad vs one-team adoption.",
+        "why": "% of hiring mentioning Clay signals broad vs one-team adoption.",
         "kind": "sumble_derived",
         "derivation": {
-          "formula": "100 * clay_teams / teams_count",
+          "formula": "wilson_lb_pct(clay_jobs, round(clay_jobs / clay_jobs_conc))",
+          "note": "job_post_concentration is the endpoint's native same-scope share (matching job posts / all job posts, both hierarchy rollups). It returns a ratio only, so the denominator is recovered by inversion \u2014 once per org from the tech with the most job posts \u2014 and the reported value is the Wilson 95% lower bound so a 1-of-1 org cannot read 100%.",
           "inputs": [
             {
-              "name": "clay_teams",
+              "name": "clay_jobs",
               "endpoint": "POST https://api.sumble.com/v6/organizations",
               "select_entity": {
-                "type": "technology",
-                "term": "clay",
+                "type": "advanced_query",
+                "term": "technology EQ 'clay'",
                 "metrics": [
-                  "team_count"
+                  "job_post_count"
                 ]
               },
-              "read": "team_count"
+              "read": "job_post_count"
             },
             {
-              "name": "teams_count",
+              "name": "clay_jobs_conc",
               "endpoint": "POST https://api.sumble.com/v6/organizations",
-              "select_attribute": "teams_count",
-              "read": "org-total team count (concentration denominator)"
+              "select_entity": {
+                "type": "advanced_query",
+                "term": "technology EQ 'clay'",
+                "metrics": [
+                  "job_post_concentration"
+                ]
+              },
+              "read": "job_post_concentration"
             }
+          ]
+        }
+      },
+      "sumble_link": {
+        "path": "/jobs",
+        "filters": {
+          "technology": [
+            "clay"
           ]
         }
       }
@@ -496,19 +515,19 @@
       "p99": 1.0,
       "api_supported": true,
       "source": {
-        "why": "Teams using Common Room prove active, in-production adoption.",
+        "why": "Teams using the Common Room tool prove active, in-production adoption.",
         "kind": "sumble_api",
         "api": {
           "endpoint": "POST https://api.sumble.com/v6/organizations",
           "select_entity": {
-            "type": "technology",
-            "term": "common-room",
+            "type": "advanced_query",
+            "term": "technology EQ 'common-room'",
             "metrics": [
               "team_count"
             ]
           },
           "read": "team_count",
-          "extract": "organizations[].entities[type='technology',term='common-room'].team_count"
+          "extract": "organizations[].entities[type='advanced_query',term=\"technology EQ 'common-room'\"].team_count"
         }
       },
       "sumble_link": {
@@ -520,38 +539,53 @@
         }
       }
     },
-    "relevant_tech_team_concentration_common-room": {
-      "label": "Common Room team share",
-      "column": "common-room_team_pct",
-      "category": "relevant_tech_team_concentration",
+    "relevant_tech_job_concentration_common-room": {
+      "label": "Common Room share of hiring",
+      "column": "common-room_job_pct",
+      "category": "relevant_tech_job_concentration",
       "transform": "linear",
       "default_within": 31.4,
       "p99": 1.0,
       "api_supported": true,
       "source": {
-        "why": "% of teams using Common Room signals broad vs one-team adoption.",
+        "why": "% of hiring mentioning Common Room signals broad vs one-team adoption.",
         "kind": "sumble_derived",
         "derivation": {
-          "formula": "100 * common-room_teams / teams_count",
+          "formula": "wilson_lb_pct(common-room_jobs, round(common-room_jobs / common-room_jobs_conc))",
+          "note": "job_post_concentration is the endpoint's native same-scope share (matching job posts / all job posts, both hierarchy rollups). It returns a ratio only, so the denominator is recovered by inversion \u2014 once per org from the tech with the most job posts \u2014 and the reported value is the Wilson 95% lower bound so a 1-of-1 org cannot read 100%.",
           "inputs": [
             {
-              "name": "common-room_teams",
+              "name": "common-room_jobs",
               "endpoint": "POST https://api.sumble.com/v6/organizations",
               "select_entity": {
-                "type": "technology",
-                "term": "common-room",
+                "type": "advanced_query",
+                "term": "technology EQ 'common-room'",
                 "metrics": [
-                  "team_count"
+                  "job_post_count"
                 ]
               },
-              "read": "team_count"
+              "read": "job_post_count"
             },
             {
-              "name": "teams_count",
+              "name": "common-room_jobs_conc",
               "endpoint": "POST https://api.sumble.com/v6/organizations",
-              "select_attribute": "teams_count",
-              "read": "org-total team count (concentration denominator)"
+              "select_entity": {
+                "type": "advanced_query",
+                "term": "technology EQ 'common-room'",
+                "metrics": [
+                  "job_post_concentration"
+                ]
+              },
+              "read": "job_post_concentration"
             }
+          ]
+        }
+      },
+      "sumble_link": {
+        "path": "/jobs",
+        "filters": {
+          "technology": [
+            "common-room"
           ]
         }
       }
@@ -565,19 +599,19 @@
       "p99": 1.0,
       "api_supported": true,
       "source": {
-        "why": "Teams using HG Insights prove active, in-production adoption.",
+        "why": "Teams using the HG Insights tool prove active, in-production adoption.",
         "kind": "sumble_api",
         "api": {
           "endpoint": "POST https://api.sumble.com/v6/organizations",
           "select_entity": {
-            "type": "technology",
-            "term": "hg-insights",
+            "type": "advanced_query",
+            "term": "technology EQ 'hg-insights'",
             "metrics": [
               "team_count"
             ]
           },
           "read": "team_count",
-          "extract": "organizations[].entities[type='technology',term='hg-insights'].team_count"
+          "extract": "organizations[].entities[type='advanced_query',term=\"technology EQ 'hg-insights'\"].team_count"
         }
       },
       "sumble_link": {
@@ -589,38 +623,53 @@
         }
       }
     },
-    "relevant_tech_team_concentration_hg-insights": {
-      "label": "HG Insights team share",
-      "column": "hg-insights_team_pct",
-      "category": "relevant_tech_team_concentration",
+    "relevant_tech_job_concentration_hg-insights": {
+      "label": "HG Insights share of hiring",
+      "column": "hg-insights_job_pct",
+      "category": "relevant_tech_job_concentration",
       "transform": "linear",
       "default_within": 18.46,
       "p99": 1.0,
       "api_supported": true,
       "source": {
-        "why": "% of teams using HG Insights signals broad vs one-team adoption.",
+        "why": "% of hiring mentioning HG Insights signals broad vs one-team adoption.",
         "kind": "sumble_derived",
         "derivation": {
-          "formula": "100 * hg-insights_teams / teams_count",
+          "formula": "wilson_lb_pct(hg-insights_jobs, round(hg-insights_jobs / hg-insights_jobs_conc))",
+          "note": "job_post_concentration is the endpoint's native same-scope share (matching job posts / all job posts, both hierarchy rollups). It returns a ratio only, so the denominator is recovered by inversion \u2014 once per org from the tech with the most job posts \u2014 and the reported value is the Wilson 95% lower bound so a 1-of-1 org cannot read 100%.",
           "inputs": [
             {
-              "name": "hg-insights_teams",
+              "name": "hg-insights_jobs",
               "endpoint": "POST https://api.sumble.com/v6/organizations",
               "select_entity": {
-                "type": "technology",
-                "term": "hg-insights",
+                "type": "advanced_query",
+                "term": "technology EQ 'hg-insights'",
                 "metrics": [
-                  "team_count"
+                  "job_post_count"
                 ]
               },
-              "read": "team_count"
+              "read": "job_post_count"
             },
             {
-              "name": "teams_count",
+              "name": "hg-insights_jobs_conc",
               "endpoint": "POST https://api.sumble.com/v6/organizations",
-              "select_attribute": "teams_count",
-              "read": "org-total team count (concentration denominator)"
+              "select_entity": {
+                "type": "advanced_query",
+                "term": "technology EQ 'hg-insights'",
+                "metrics": [
+                  "job_post_concentration"
+                ]
+              },
+              "read": "job_post_concentration"
             }
+          ]
+        }
+      },
+      "sumble_link": {
+        "path": "/jobs",
+        "filters": {
+          "technology": [
+            "hg-insights"
           ]
         }
       }
@@ -634,19 +683,19 @@
       "p99": 1.0,
       "api_supported": true,
       "source": {
-        "why": "Teams using ZoomInfo prove active, in-production adoption.",
+        "why": "Teams using the ZoomInfo tool prove active, in-production adoption.",
         "kind": "sumble_api",
         "api": {
           "endpoint": "POST https://api.sumble.com/v6/organizations",
           "select_entity": {
-            "type": "technology",
-            "term": "zoominfo",
+            "type": "advanced_query",
+            "term": "technology EQ 'zoominfo'",
             "metrics": [
               "team_count"
             ]
           },
           "read": "team_count",
-          "extract": "organizations[].entities[type='technology',term='zoominfo'].team_count"
+          "extract": "organizations[].entities[type='advanced_query',term=\"technology EQ 'zoominfo'\"].team_count"
         }
       },
       "sumble_link": {
@@ -658,44 +707,59 @@
         }
       }
     },
-    "relevant_tech_team_concentration_zoominfo": {
-      "label": "ZoomInfo team share",
-      "column": "zoominfo_team_pct",
-      "category": "relevant_tech_team_concentration",
+    "relevant_tech_job_concentration_zoominfo": {
+      "label": "ZoomInfo share of hiring",
+      "column": "zoominfo_job_pct",
+      "category": "relevant_tech_job_concentration",
       "transform": "linear",
       "default_within": 18.09,
       "p99": 1.0,
       "api_supported": true,
       "source": {
-        "why": "% of teams using ZoomInfo signals broad vs one-team adoption.",
+        "why": "% of hiring mentioning ZoomInfo signals broad vs one-team adoption.",
         "kind": "sumble_derived",
         "derivation": {
-          "formula": "100 * zoominfo_teams / teams_count",
+          "formula": "wilson_lb_pct(zoominfo_jobs, round(zoominfo_jobs / zoominfo_jobs_conc))",
+          "note": "job_post_concentration is the endpoint's native same-scope share (matching job posts / all job posts, both hierarchy rollups). It returns a ratio only, so the denominator is recovered by inversion \u2014 once per org from the tech with the most job posts \u2014 and the reported value is the Wilson 95% lower bound so a 1-of-1 org cannot read 100%.",
           "inputs": [
             {
-              "name": "zoominfo_teams",
+              "name": "zoominfo_jobs",
               "endpoint": "POST https://api.sumble.com/v6/organizations",
               "select_entity": {
-                "type": "technology",
-                "term": "zoominfo",
+                "type": "advanced_query",
+                "term": "technology EQ 'zoominfo'",
                 "metrics": [
-                  "team_count"
+                  "job_post_count"
                 ]
               },
-              "read": "team_count"
+              "read": "job_post_count"
             },
             {
-              "name": "teams_count",
+              "name": "zoominfo_jobs_conc",
               "endpoint": "POST https://api.sumble.com/v6/organizations",
-              "select_attribute": "teams_count",
-              "read": "org-total team count (concentration denominator)"
+              "select_entity": {
+                "type": "advanced_query",
+                "term": "technology EQ 'zoominfo'",
+                "metrics": [
+                  "job_post_concentration"
+                ]
+              },
+              "read": "job_post_concentration"
             }
+          ]
+        }
+      },
+      "sumble_link": {
+        "path": "/jobs",
+        "filters": {
+          "technology": [
+            "zoominfo"
           ]
         }
       }
     },
     "intent_project_tech_count_go-to-market-modernization": {
-      "label": "GTM Modernization \u00d7 ICP tech jobs (3mo)",
+      "label": "GTM Modernization \u00d7 tech (3mo)",
       "column": "go-to-market-modernization_x_relevant_tech_jobposts",
       "category": "intent_project_tech_count",
       "transform": "log",
@@ -713,7 +777,7 @@
             "metrics": [
               "job_post_count"
             ],
-            "since": "2026-03-01"
+            "since": "2026-04-23"
           },
           "read": "job_post_count",
           "extract": "organizations[].entities[type='advanced_query',term=\"project EQ 'go-to-market-modernization' AND technology IN ('clay', 'common-room', 'hg-insights', 'zoominfo')\"].job_post_count",
@@ -737,98 +801,13 @@
           ]
         }
       }
-    },
-    "intent_project_persona_count_go-to-market-modernization": {
-      "label": "GTM Modernization \u00d7 ICP persona jobs (3mo)",
-      "column": "go-to-market-modernization_x_relevant_persona_jobposts",
-      "category": "intent_project_persona_count",
-      "transform": "log",
-      "default_within": 100.0,
-      "p99": 1.0,
-      "api_supported": true,
-      "source": {
-        "why": "Recent GTM Modernization jobs for an ICP persona show who is staffing the project \u2014 buying-window + fit.",
-        "kind": "sumble_api",
-        "api": {
-          "endpoint": "POST https://api.sumble.com/v6/organizations",
-          "select_entity": {
-            "type": "advanced_query",
-            "term": "project EQ 'go-to-market-modernization' AND job_function IN ('Sales', 'Marketing', 'Revenue Operations')",
-            "metrics": [
-              "job_post_count"
-            ],
-            "since": "2026-03-01"
-          },
-          "read": "job_post_count",
-          "extract": "organizations[].entities[type='advanced_query',term=\"project EQ 'go-to-market-modernization' AND job_function IN ('Sales', 'Marketing', 'Revenue Operations')\"].job_post_count",
-          "since_note": "3-month window; recompute `since` to run date \u2212 3 months."
-        }
-      },
-      "sumble_link": {
-        "path": "/jobs",
-        "filters": {
-          "project": [
-            "go-to-market-modernization"
-          ],
-          "job_function": [
-            "Sales",
-            "Marketing",
-            "Revenue Operations"
-          ],
-          "hiring_period": [
-            "3mo"
-          ]
-        }
-      }
-    },
-    "plg_active_users_28d": {
-      "label": "Active users (28d)",
-      "column": "plg_active_users_28d",
-      "category": "product_usage",
-      "transform": "log",
-      "default_within": 100.0,
-      "p99": 6.5,
-      "api_supported": false,
-      "api_unsupported_reason": "First-party signal \u2014 not in Sumble's public API.",
-      "source": {
-        "kind": "first_party",
-        "why": "Existing product engagement is the strongest expansion signal.",
-        "synced_pointer": "warehouse/product_usage.active_users_28d (join by account domain)"
-      }
-    },
-    "marketing_event_attendees": {
-      "label": "Event attendees (90d)",
-      "column": "marketing_event_attendees",
-      "category": "marketing_engagement",
-      "transform": "log",
-      "default_within": 100.0,
-      "p99": 3.2,
-      "api_supported": false,
-      "api_unsupported_reason": "First-party signal \u2014 not in Sumble's public API.",
-      "source": {
-        "kind": "first_party",
-        "why": "Recent event engagement signals active interest.",
-        "synced_pointer": "hubspot/marketing.event_attendees_90d (join by account domain)"
-      }
-    },
-    "intent_topic_surge_score": {
-      "label": "3P intent surge",
-      "column": "intent_topic_surge_score",
-      "category": "third_party_intent",
-      "transform": "linear",
-      "default_within": 100.0,
-      "p99": 60.0,
-      "api_supported": false,
-      "api_unsupported_reason": "First-party signal \u2014 not in Sumble's public API.",
-      "source": {
-        "kind": "first_party",
-        "why": "Off-property research before the account raises a hand.",
-        "synced_pointer": "6sense/intent.topic_surge_score (join by account domain)"
-      }
     }
   },
   "multipliers": [],
   "tag_multipliers": [],
   "tag_multipliers_defaults": [],
-  "_tag_calibration_audit": {}
+  "_tag_calibration_audit": {
+    "attrs": {},
+    "industries": {}
+  }
 }

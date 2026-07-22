@@ -71,7 +71,7 @@ DEFAULT_CATEGORY_SECTION = {
     "intent_project_tech_count": "size",
     "funding": "size",
     "icp_persona_concentration": "concentration",
-    "relevant_tech_team_concentration": "concentration",
+    "relevant_tech_job_concentration": "concentration",
     "icp_persona_growth": "growth_momentum",
     "funding_momentum": "growth_momentum",
 }
@@ -91,8 +91,8 @@ CATEGORY_META = {
         "label": "Persona concentration",
         "default_pct": 60.0,
     },
-    "relevant_tech_team_concentration": {
-        "label": "Tech team concentration",
+    "relevant_tech_job_concentration": {
+        "label": "Tech hiring concentration",
         "default_pct": 40.0,
     },
     "icp_persona_growth": {"label": "Persona growth (YoY)", "default_pct": 100.0},
@@ -106,7 +106,7 @@ CATEGORY_META = {
 CATEGORY_CLONE_FROM = {
     "icp_persona_concentration": "icp_persona_count",
     "icp_persona_growth": "icp_persona_count",
-    "relevant_tech_team_concentration": "relevant_tech_team_count",
+    "relevant_tech_job_concentration": "relevant_tech_team_count",
 }
 
 
@@ -148,20 +148,37 @@ def compute_p99(values: list[float], transform: str) -> float:
     return round(max(xs[idx], 1e-9), 6)
 
 
-def _entity(etype: str, term: str, metric: str, since: str | None = None) -> dict:
+def _entity(
+    etype: str,
+    term: str,
+    metric: str,
+    since: str | None = None,
+    granularity: str | None = None,
+) -> dict:
     ent: dict = {"type": etype, "term": term, "metrics": [metric]}
     if since:
         ent["since"] = since
+    # The endpoint REQUIRES granularity for technology_category (and rejects it
+    # for every other type), so it has to survive into the config — score_accounts
+    # replays these blocks verbatim and would 422 without it.
+    if granularity:
+        ent["granularity"] = granularity
     return ent
 
 
-def _api_block(etype: str, term: str, metric: str, since: str | None = None) -> dict:
+def _api_block(
+    etype: str,
+    term: str,
+    metric: str,
+    since: str | None = None,
+    granularity: str | None = None,
+) -> dict:
     """A `source.api` block: the endpoint, the `select` entity to send, the
     metric to read, and a human-readable extract path. `since` (when present)
     is a 3-month window the scorer recomputes to (run date − 3 months)."""
     block: dict = {
         "endpoint": ENDPOINT,
-        "select_entity": _entity(etype, term, metric, since),
+        "select_entity": _entity(etype, term, metric, since, granularity),
         "read": metric,
         "extract": f"organizations[].entities[type={etype!r},term={term!r}].{metric}",
     }
@@ -174,11 +191,13 @@ def _attr_input(name: str, attribute: str, read: str) -> dict:
     return {"name": name, "endpoint": ENDPOINT, "select_attribute": attribute, "read": read}
 
 
-def _entity_input(name: str, etype: str, term: str, metric: str) -> dict:
+def _entity_input(
+    name: str, etype: str, term: str, metric: str, granularity: str | None = None
+) -> dict:
     return {
         "name": name,
         "endpoint": ENDPOINT,
-        "select_entity": _entity(etype, term, metric),
+        "select_entity": _entity(etype, term, metric, granularity=granularity),
         "read": metric,
     }
 
@@ -203,8 +222,10 @@ def main() -> None:
     techs_key = [t for t in techs if t.get("tier") != "other"]
     techs_other = [t for t in techs if t.get("tier") == "other"]
     techs_all = techs_key + techs_other
-    tech_tool_slugs = [t["slug"] for t in techs if t.get("kind") != "category"]
-    tech_cat_slugs = [t["slug"] for t in techs if t.get("kind") == "category"]
+    # Individual slugs for the intent deep link — a synthetic category
+    # contributes its MEMBERS (the page filters on real technologies).
+    tech_tool_slugs = sumble_v6.expand_tech_slugs(techs)
+    tech_cat_slugs = sumble_v6.expand_tech_categories(techs)
     since = sumble_v6.since_3mo()
 
     persona_decay = decay_weights(len(personas))
@@ -361,16 +382,27 @@ def main() -> None:
                 "why": f"Concentration filters out big orgs with a {label} per division.",
                 "kind": "sumble_derived",
                 "derivation": {
-                    "formula": f"100 * {slug}_people / employee_count_int",
+                    "formula": (
+                        f"wilson_lb_pct({slug}_people, "
+                        f"round({slug}_people / {slug}_people_conc))"
+                    ),
+                    "note": (
+                        "people_concentration is the endpoint's native same-scope "
+                        "share (people in function / people in org, both hierarchy "
+                        "rollups). It returns a ratio only, so the denominator is "
+                        "recovered by inversion — once per org from the persona with "
+                        "the largest headcount — and the reported value is the Wilson "
+                        "95% lower bound so a 1-of-1 org cannot read 100%."
+                    ),
                     "inputs": [
                         _entity_input(
                             f"{slug}_people", "job_function", name, "people_count"
                         ),
-                        _attr_input(
-                            "employee_count_int",
-                            "employee_count",
-                            "exact org headcount (employee_count is an integer; "
-                            "legacy band strings map to a midpoint)",
+                        _entity_input(
+                            f"{slug}_people_conc",
+                            "job_function",
+                            name,
+                            "people_concentration",
                         ),
                     ],
                 },
@@ -410,10 +442,30 @@ def main() -> None:
     # deep-link field differ, but the column/score shape is identical.
     for idx, t in enumerate(techs_all):
         slug, label = t["slug"], t["label"]
-        is_cat = t.get("kind") == "category"
-        etype = "technology_category" if is_cat else "technology"
-        link_field = "technology_category" if is_cat else "technology"
-        kind_word = "category" if is_cat else "tool"
+        kind = t.get("kind")
+        ent = sumble_v6.tech_entity(t)
+        etype, eterm, egran = ent["type"], ent["term"], ent["granularity"]
+        if kind == "synthetic":
+            # Authored membership — deep-link on the members themselves (one OR
+            # group), and name them in `why` so the score stays auditable.
+            members = sumble_v6.tech_members(t)
+            member_cats = sumble_v6.tech_member_categories(t)
+            link_filters = {}
+            if members:
+                link_filters["technology"] = members
+            if member_cats:
+                link_filters["technology_category"] = member_cats
+            kind_word = "category"
+            why = (
+                f"Teams using any of the {label} category "
+                f"({', '.join(members + member_cats)}) prove active, "
+                "in-production adoption."
+            )
+        else:
+            link_field = "technology_category" if kind == "category" else "technology"
+            link_filters = {link_field: [slug]}
+            kind_word = "category" if kind == "category" else "tool"
+            why = f"Teams using the {label} {kind_word} prove active, in-production adoption."
         add_signal(
             key=f"relevant_tech_team_count_{slug}",
             column=f"{slug}_teams",
@@ -423,35 +475,50 @@ def main() -> None:
             within=tech_decay[idx],
             api_supported=True,
             source={
-                "why": f"Teams using the {label} {kind_word} prove active, in-production adoption.",
+                "why": why,
                 "kind": "sumble_api",
-                "api": _api_block(etype, slug, "team_count"),
+                "api": _api_block(etype, eterm, "team_count", granularity=egran),
             },
-            sumble_link={"path": "/teams", "filters": {link_field: [slug]}},
+            sumble_link={"path": "/teams", "filters": link_filters},
         )
         add_signal(
-            key=f"relevant_tech_team_concentration_{slug}",
-            column=f"{slug}_team_pct",
-            label=f"{label} team share",
-            category="relevant_tech_team_concentration",
+            key=f"relevant_tech_job_concentration_{slug}",
+            column=f"{slug}_job_pct",
+            label=f"{label} share of hiring",
+            category="relevant_tech_job_concentration",
             transform="linear",
             within=tech_decay[idx],
             api_supported=True,
             source={
-                "why": f"% of teams using {label} signals broad vs one-team adoption.",
+                "why": f"% of hiring mentioning {label} signals broad vs one-team adoption.",
                 "kind": "sumble_derived",
                 "derivation": {
-                    "formula": f"100 * {slug}_teams / teams_count",
+                    "formula": (
+                        f"wilson_lb_pct({slug}_jobs, round({slug}_jobs / {slug}_jobs_conc))"
+                    ),
+                    "note": (
+                        "job_post_concentration is the endpoint's native same-scope "
+                        "share (matching job posts / all job posts, both hierarchy "
+                        "rollups). It returns a ratio only, so the denominator is "
+                        "recovered by inversion — once per org from the tech with the "
+                        "most job posts — and the reported value is the Wilson 95% "
+                        "lower bound so a 1-of-1 org cannot read 100%."
+                    ),
                     "inputs": [
-                        _entity_input(f"{slug}_teams", etype, slug, "team_count"),
-                        _attr_input(
-                            "teams_count",
-                            "teams_count",
-                            "org-total team count (concentration denominator)",
+                        _entity_input(
+                            f"{slug}_jobs", etype, eterm, "job_post_count", granularity=egran
+                        ),
+                        _entity_input(
+                            f"{slug}_jobs_conc",
+                            etype,
+                            eterm,
+                            "job_post_concentration",
+                            granularity=egran,
                         ),
                     ],
                 },
             },
+            sumble_link={"path": "/jobs", "filters": link_filters},
         )
 
     # Funding signals (only when requested). Modelled as single-input attribute
@@ -681,8 +748,16 @@ def main() -> None:
             ),
             "api_supported": (
                 "true if score_accounts.py can reproduce the column from the public API. "
-                "false (tech concentration) stays in the app for tuning but is dropped + "
-                "weight-renormalised by the portable scorer."
+                "false (first-party signals only) stays in the app for tuning but is "
+                "dropped + weight-renormalised by the portable scorer."
+            ),
+            "concentration": (
+                "Concentration columns come from the endpoint's native same-scope "
+                "metrics (people_concentration / job_post_concentration), reported as "
+                "the Wilson 95% lower bound over a denominator recovered as "
+                "count / ratio — recovered once per org from the largest count. See "
+                "sumble_v6.recover_total; that recovery is a temporary workaround "
+                "pending hierarchy-scoped count attributes on /v6/organizations."
             ),
         },
         "saved_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),

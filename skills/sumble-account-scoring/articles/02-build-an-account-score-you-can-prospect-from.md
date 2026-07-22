@@ -130,9 +130,19 @@ This is the exact formula the skill implements, written so an LLM (or a data tea
 Every account gets a vector of **raw attribute values** `xᵢ(a) ≥ 0`. There are three shapes, all pulled from one call to `POST https://api.sumble.com/v6/organizations`:
 
 - **Counts**: `people_count` for a persona (job function), `team_count` for a technology, `job_post_count` for an intent query. Raw non-negative integers.
-- **Concentrations**: derived ratios, size-neutral:
-  - persona share `= 100 · persona_people / employee_count`
-  - tech share `= 100 · tech_teams / teams_count`
+- **Concentrations**: size-neutral shares, read from the API's own concentration
+  metrics so numerator and denominator always cover the same population (both are
+  rolled up across the org's subsidiaries — dividing by a plain org attribute
+  instead would make a holding company read "4200% of teams"):
+  - persona share, from `people_concentration` (people in the function ÷ people in the org)
+  - tech hiring share, from `job_post_concentration` (matching job posts ÷ all job posts)
+
+  Each is reported as the **Wilson 95% lower confidence bound** rather than the
+  raw ratio — the lowest share consistent with what was observed. A raw ratio
+  scores 1-of-1 and 900-of-900 identically at "100%", which lets barely-measured
+  orgs saturate the attribute and crowd out real ICP accounts; the bound pulls
+  thin evidence toward 0 (1/1 → 21%) and leaves well-measured orgs alone
+  (266/3630 → 6.5%, raw 7.3%).
 - **Growth**: persona `people_count_growth_1y`, returned by the API as a percent (e.g. `50.0`) and stored as a ratio (`× 0.01`). This is the one attribute that can be negative.
 
 Intent attributes are **windowed**: `job_post_count` is filtered to the last ~90 days (`since = run_date − 90d`), recomputed at scoring time so the window tracks *now*, not the build date.

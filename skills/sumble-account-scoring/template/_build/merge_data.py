@@ -322,6 +322,22 @@ def main() -> None:
         f"Built {len(all_rows)} matched rows ({len(gold_rows)} gold). "
         f"Calibration emitted {len(multipliers_defaults)} multipliers."
     )
+    # Concentration comes from the endpoint's native same-scope metrics, whose
+    # denominator is recovered by inversion (sumble_v6.recover_total). Surface
+    # the rows where it could not be recovered at all — their shares read 0.
+    n_no_den = sum(
+        1
+        for r in all_rows
+        if str(r.get("people_total_est", "0")) in ("0", "0.0")
+        and str(r.get("jobs_total_est", "0")) in ("0", "0.0")
+    )
+    if n_no_den:
+        pct = 100.0 * n_no_den / len(all_rows) if all_rows else 0.0
+        print(
+            f"No concentration denominator recoverable for {n_no_den} row(s) "
+            f"({pct:.1f}%) — no measured persona/tech presence to invert; "
+            "their _pct columns read 0."
+        )
     print(f"Wrote {data_csv}")
 
 

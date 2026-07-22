@@ -204,6 +204,9 @@ def collect_select(signals_scored: dict[str, dict]) -> dict:
                 "term": ent["term"],
                 "metrics": list(ent.get("metrics") or []),
                 **({"since": ent["since"]} if "since" in ent else {}),
+                # Required by the endpoint for technology_category, rejected for
+                # every other type — so carry it through exactly as configured.
+                **({"granularity": ent["granularity"]} if ent.get("granularity") else {}),
             }
         else:
             for m in ent.get("metrics") or []:
@@ -270,7 +273,74 @@ def _days_since_attr(src: dict, attrs: dict) -> float:
     return float(max(1, (_dt.date.today() - d).days))
 
 
-def signal_raw(sig: dict, ents: dict, attrs: dict) -> float:
+# The endpoint's native concentration metrics. Both sides of each ratio are
+# hierarchy rollups, so a parent org's share can never exceed 100%.
+CONCENTRATION_METRICS = ("people_concentration", "job_post_concentration")
+
+CONFIDENCE_Z = 1.96
+
+
+def wilson_lb_pct(numerator: float, denominator: float) -> float:
+    """Concentration percentage as the Wilson 95% lower confidence bound — the
+    lowest share that could plausibly explain what we observed. Mirrors
+    `sumble_v6._share` exactly so this scorer and the app agree.
+
+    A raw ratio scores 1/1 and 900/900 identically at 100%, letting orgs we know
+    almost nothing about saturate the signal; the lower bound shrinks thin
+    evidence toward 0 and leaves well-measured orgs essentially untouched.
+    """
+    if numerator <= 0 or denominator <= 0:
+        return 0.0
+    z, n = CONFIDENCE_Z, max(denominator, numerator)
+    p = numerator / n
+    z2 = z * z
+    lb = (
+        p + z2 / (2 * n) - z * math.sqrt(p * (1 - p) / n + z2 / (4 * n * n))
+    ) / (1 + z2 / n)
+    return round(max(100.0 * lb, 0.0), 3)
+
+
+def concentration_metric(sig: dict) -> str | None:
+    """The native concentration metric a signal's derivation inverts, if any."""
+    deriv = (sig.get("source") or {}).get("derivation")
+    if not isinstance(deriv, dict):
+        return None
+    inputs = deriv.get("inputs") or []
+    if len(inputs) < 2:
+        return None
+    read = inputs[1].get("read") or ""
+    return read if read in CONCENTRATION_METRICS else None
+
+
+def recover_totals(
+    config: dict, eff: dict[str, float], ents: dict, attrs: dict
+) -> dict[str, float]:
+    """metric -> the org-wide concentration DENOMINATOR, recovered by inversion.
+
+    WORKAROUND — delete once /v6/organizations exposes hierarchy-scoped counts
+    as attributes (flagged to the API team). The concentration metrics return a
+    ratio only, but the Wilson bound needs the sample size, so we invert:
+    `denominator = count / ratio`. The ratio is rounded to 4dp, so precision
+    degrades as the share shrinks — every signal sharing a metric also shares one
+    org-wide denominator, so recover it once from the LARGEST count available
+    (the best-conditioned pair) and reuse it. Mirrors `sumble_v6.recover_total`.
+    """
+    best: dict[str, tuple[float, float]] = {}
+    for key in eff:
+        metric = concentration_metric(config["signals"][key])
+        if not metric:
+            continue
+        inputs = config["signals"][key]["source"]["derivation"]["inputs"]
+        count = _input_value(inputs[0], ents, attrs)
+        ratio = _input_value(inputs[1], ents, attrs)
+        if ratio > 0 and count > best.get(metric, (0.0, 0.0))[0]:
+            best[metric] = (count, count / ratio)
+    return {m: round(total) for m, (_, total) in best.items()}
+
+
+def signal_raw(
+    sig: dict, ents: dict, attrs: dict, totals: dict[str, float] | None = None
+) -> float:
     src = sig.get("source", {})
     if sig.get("transform") == "recency":
         return _days_since_attr(src, attrs)
@@ -283,7 +353,13 @@ def signal_raw(sig: dict, ents: dict, attrs: dict) -> float:
     deriv = src.get("derivation")
     if isinstance(deriv, dict):
         inputs = deriv.get("inputs") or []
-        # api_supported derived signals are concentrations: 100 * num / denom.
+        # Concentration: count + native ratio -> Wilson bound over the org-wide
+        # denominator recovered once per org.
+        metric = concentration_metric(sig)
+        if metric:
+            num = _input_value(inputs[0], ents, attrs)
+            return wilson_lb_pct(num, (totals or {}).get(metric, 0.0))
+        # Older configs express a concentration as a plain 100 * num / denom.
         if len(inputs) >= 2:
             num = _input_value(inputs[0], ents, attrs)
             den = _input_value(inputs[1], ents, attrs)
@@ -424,14 +500,16 @@ def sumble_link(base: str, slug: str, spec: dict | None) -> str:
         if field in ("technology", "technology_category"):
             if tech_done:
                 continue
-            groups.append({
-                "operator": "OR",
-                "fields": {
-                    k: {"include": raw_filters[k], "exclude": []}
-                    for k in ("technology", "technology_category")
-                    if k in raw_filters
-                },
-            })
+            groups.append(
+                {
+                    "operator": "OR",
+                    "fields": {
+                        k: {"include": raw_filters[k], "exclude": []}
+                        for k in ("technology", "technology_category")
+                        if k in raw_filters
+                    },
+                }
+            )
             tech_done = True
             continue
         groups.append(
@@ -475,9 +553,12 @@ def build_row(account: dict, resp_org: dict, config: dict, eff: dict[str, float]
     # spec — so the scored output is clickable, like the app's score.csv.
     row["sumble_url"] = f"{link_base}{slug}" if slug else ""
 
+    # One recovered denominator per concentration metric, shared by every signal
+    # that uses it (see recover_totals).
+    totals = recover_totals(config, eff, ents, attrs)
     for key in eff:
         sig = config["signals"][key]
-        row[sig["column"]] = signal_raw(sig, ents, attrs)
+        row[sig["column"]] = signal_raw(sig, ents, attrs, totals)
         if sig.get("sumble_link"):
             row[f"{sig['column']}_link"] = sumble_link(
                 link_base, slug, sig.get("sumble_link")
