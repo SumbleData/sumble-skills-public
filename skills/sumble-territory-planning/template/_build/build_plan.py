@@ -71,6 +71,7 @@ def main() -> None:
             "segment": seg,
             "is_rep": is_rep,
             "capacity": tl.to_int(cap) if str(cap or "").strip() else None,
+            "in_balance": tl.rep_in_balance(r),
         })
     if unknown_segment:
         sys.exit(
@@ -99,6 +100,17 @@ def main() -> None:
                 "key": str(s.get("key")),
                 "label": str(s.get("label") or s.get("key")),
                 "order": tl.to_int(s.get("order"), i + 1),
+                # Max accounts a rep in this segment may hold, unless their own
+                # `capacity` overrides it. Stated per segment because that is
+                # how sales leaders state it ("enterprise carry 50, commercial
+                # 150") — and because without a cap the mover will route every
+                # unallocated account, which on a large house pile produces an
+                # action list nobody can act on. null = unlimited.
+                "default_capacity": (
+                    tl.to_int(s.get("default_capacity"))
+                    if str(s.get("default_capacity") or "").strip()
+                    else None
+                ),
             }
             for i, s in enumerate(segments)
         ],
@@ -132,8 +144,21 @@ def main() -> None:
                 spec.get("whitespace_top_n"), tl.DEFAULT_WHITESPACE_TOP_N
             ),
         },
+        "strong_cutoff": tl.to_int(
+            spec.get("strong_cutoff"), tl.DEFAULT_STRONG_CUTOFF
+        ),
+        "tier_decile_weight": tl.to_int(
+            spec.get("tier_decile_weight"), tl.DEFAULT_TIER_DECILE_WEIGHT
+        ),
         "territory_csv": "territory.csv",
     }
+
+    # Resolve each rep's cap now that segment defaults exist, so every consumer
+    # (mover, app, a human reading the plan) sees the same number rather than
+    # each re-deriving the fallback.
+    for rep in plan["reps"]:
+        rep["effective_capacity"] = tl.effective_capacity(rep, plan["segments"])
+
     tl.write_json(out_path, plan)
 
     print(f"[plan] wrote {out_path}")
@@ -141,6 +166,33 @@ def main() -> None:
         f"[plan] {len(active)} reps across {len(segments)} segments · boundary: "
         + "; ".join(f"{t['segment']} >= {t['min']:,.0f}" for t in plan["boundary"]["thresholds"])
     )
+    for seg in plan["segments"]:
+        cap = seg["default_capacity"]
+        print(
+            f"[plan] segment {seg['key']}: default capacity "
+            + (f"{cap:,} accounts/rep" if cap else "unlimited")
+        )
+    for rep in plan["reps"]:
+        if rep["is_rep"] and rep["capacity"]:
+            print(
+                f"[plan]   {rep['name']} overrides capacity: {rep['capacity']:,}"
+            )
+    excluded = [r["name"] for r in plan["reps"] if r["is_rep"] and not r["in_balance"]]
+    if excluded:
+        print(
+            "[plan] excluded from balance (player-coach): " + ", ".join(excluded) +
+            " — their books stay visible but are not measured for fairness, and "
+            "no accounts will be proposed for a move off them."
+        )
+    uncapped = [
+        r["name"] for r in plan["reps"] if r["is_rep"] and not r["effective_capacity"]
+    ]
+    if uncapped:
+        print(
+            "[plan] NOTE: no capacity for " + ", ".join(uncapped) +
+            " — the mover will keep assigning unowned accounts to them until the "
+            "segment is even, which on a large unallocated pile can be thousands."
+        )
     if missing_email:
         print(
             "[plan] WARNING: no email for " + ", ".join(missing_email) +

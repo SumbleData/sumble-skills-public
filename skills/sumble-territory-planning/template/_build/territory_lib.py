@@ -78,6 +78,53 @@ CV_STOP = 0.10          # stop rebalancing once the segment is this even
 MAX_MOVE_FRAC = 0.15    # never churn more than this share of a segment's book
 DEFAULT_WHITESPACE_TOP_N = 50
 
+# An account is "strong" (for the strong-but-idle / strong-but-unallocated
+# attention flags) if it is among the top-N accounts by ICP score. Global, not
+# per-segment — "the strongest accounts nobody is working" is a book-wide
+# question. Adjustable live in the app; this is the default / CSV baseline.
+DEFAULT_STRONG_CUTOFF = 500
+
+# Weight the TOP DECILE of a segment gets, relative to the rest of the top
+# quartile (=1), in the Overview's Capture / Activation metrics. 2 = a top-decile
+# account counts double. Purely a display metric, computed in the app.
+DEFAULT_TIER_DECILE_WEIGHT = 2
+
+
+def rep_in_balance(rep: dict[str, Any]) -> bool:
+    """Whether this rep's book counts toward segment balance.
+
+    Defaults to True. Set `in_balance=0` for a player-coach — a sales leader
+    who legitimately owns accounts but whose book should not be measured for
+    fairness, nor have accounts moved off it. They stay fully visible
+    everywhere else: they still own their accounts, their activity still
+    counts, and their accounts are still allocated rather than unallocated.
+    """
+    return truthy(rep.get("in_balance", "1"))
+
+
+def effective_capacity(
+    rep: dict[str, Any], segments: Iterable[dict[str, Any]]
+) -> int | None:
+    """Max accounts this rep may hold: their own `capacity`, else their
+    segment's `default_capacity`, else unlimited (None).
+
+    Segment-level defaults exist so a cap can be stated the way sales leaders
+    actually state it ("enterprise reps carry 50, commercial 150") instead of
+    being duplicated onto every rep row and drifting out of sync.
+    """
+    own = rep.get("capacity")
+    if str(own or "").strip():
+        return to_int(own)
+    seg_key = str(rep.get("segment") or "")
+    for seg in segments:
+        if str(seg.get("key")) == seg_key:
+            default = seg.get("default_capacity")
+            if str(default or "").strip():
+                return to_int(default)
+            break
+    return None
+
+
 TERRITORY_COLUMNS = [
     "org_id", "name", "domain", "crm_account_id", "account_category",
     "score", "score_source", "size_metric", "size_metric_name",
@@ -435,6 +482,11 @@ def book_stats(
             "worked": 0,
             "top_quartile": 0,
             "sum_pipeline": 0.0,
+            # A player-coach stays visible here — their book, coverage and
+            # activity are all still reported — but is left out of the CV
+            # below, so one deliberately odd-shaped book doesn't read as the
+            # segment being unfair.
+            "in_balance": rep_in_balance(r),
         }
 
     scored = [to_float(r.get("score")) for r in rows if str(r.get("account_category") or "") in cats]
@@ -461,7 +513,11 @@ def book_stats(
             book["top_quartile"] += 1
 
     for entry in by_segment.values():
-        sums = [b["sum_score"] for b in entry["reps"].values()]
+        sums = [b["sum_score"] for b in entry["reps"].values() if b["in_balance"]]
+        # A CV over fewer than two books is not a fairness reading — it is 0 by
+        # construction. Callers surface `n_in_balance` so "balanced" is never
+        # reported for a segment that only has one measured rep.
+        entry["n_in_balance"] = len(sums)
         entry["cv"] = coefficient_of_variation(sums)
         entry["label"] = balance_label(entry["cv"])
         entry["mean_sum_score"] = (sum(sums) / len(sums)) if sums else 0.0
@@ -470,3 +526,350 @@ def book_stats(
             b["sum_score"] = round(b["sum_score"], 3)
             b["worked_pct"] = round(100.0 * b["worked"] / b["n_accounts"], 1) if b["n_accounts"] else 0.0
     return by_segment
+
+
+# =====================================================================
+# Calibration + the move engine
+#
+# Both live here rather than in `suggest_moves.py` so the CLI and the app
+# drive EXACTLY the same code. The app is stdlib-only and imports this module
+# as a sibling; duplicating the four phases in JavaScript (or re-shelling to
+# the CLI) is how the bars and the export start disagreeing with each other.
+# =====================================================================
+
+WHITESPACE_CATEGORIES = {"whitespace", "whitespace_subsidiary"}
+FROZEN_STATUSES = {"accepted", "rejected", "manual"}
+
+
+def recompute_segments(plan: dict[str, Any], rows: list[dict[str, Any]]) -> None:
+    """Re-derive every boundary-dependent field, in place.
+
+    Called after the segment threshold changes — from the app's calibration
+    panel, or by `merge_territory.py` when the sheet is first built. Sets
+    `account_segment`, `segment_misfit` and `strong_idle`.
+
+    `strong_idle` = one of the top-`strong_cutoff` accounts by ICP score
+    (a global cutoff, default 500), owned, and not worked — the strongest
+    accounts nobody is working. The app recomputes this live from the sidebar
+    cutoff; this keeps the exported CSV consistent with the default.
+    """
+    segments = plan["segments"]
+    boundary = plan["boundary"]
+    cutoff = to_int(plan.get("strong_cutoff"), DEFAULT_STRONG_CUTOFF) or DEFAULT_STRONG_CUTOFF
+
+    for row in rows:
+        row["account_segment"] = segment_for_size(
+            to_float(row.get("size_metric")), boundary, segments
+        )
+        owner = str(row.get("owner") or "")
+        rep_seg = str(row.get("rep_segment") or "")
+        acct_seg = str(row.get("account_segment") or "")
+        row["segment_misfit"] = (
+            1 if (owner and rep_seg and acct_seg and rep_seg != acct_seg) else 0
+        )
+        row["strong_idle"] = 0
+
+    # "Strong" = top-N by score across all real (non-whitespace) accounts.
+    ranked = sorted(
+        (r for r in rows if str(r.get("account_category") or "") not in WHITESPACE_CATEGORIES),
+        key=lambda r: -to_float(r.get("score")),
+    )
+    strong_ids = {str(r.get("org_id")) for r in ranked[:cutoff]}
+    for r in rows:
+        if (
+            str(r.get("org_id")) in strong_ids
+            and str(r.get("owner") or "")
+            and not truthy(r.get("worked"))
+        ):
+            r["strong_idle"] = 1
+
+
+def effective_owner(row: dict[str, Any]) -> str:
+    """Who owns the account once the user's accepted/manual decisions are
+    applied — what the balance maths must measure against."""
+    if str(row.get("proposal_status") or "") in ("accepted", "manual"):
+        return str(row.get("proposed_owner") or "") or str(row.get("owner") or "")
+    return str(row.get("owner") or "")
+
+
+class Books:
+    """Per-rep load inside one segment, kept incrementally so a greedy pass
+    doesn't rescan the whole sheet after every move."""
+
+    def __init__(
+        self,
+        reps: list[dict[str, Any]],
+        rows: list[dict[str, Any]],
+        balance_cats: set[str],
+    ) -> None:
+        self.reps = {r["name"]: r for r in reps}
+        self.sum_score: dict[str, float] = {r["name"]: 0.0 for r in reps}
+        self.n_accounts: dict[str, int] = {r["name"]: 0 for r in reps}
+        for row in rows:
+            owner = effective_owner(row)
+            if owner in self.sum_score and str(row.get("account_category")) in balance_cats:
+                self.sum_score[owner] += to_float(row.get("score"))
+                self.n_accounts[owner] += 1
+
+    def add(self, rep: str, score: float) -> None:
+        if rep in self.sum_score:
+            self.sum_score[rep] += score
+            self.n_accounts[rep] += 1
+
+    def remove(self, rep: str, score: float) -> None:
+        if rep in self.sum_score:
+            self.sum_score[rep] -= score
+            self.n_accounts[rep] -= 1
+
+    def cv(self) -> float:
+        return coefficient_of_variation(list(self.sum_score.values()))
+
+    def has_capacity(self, rep: str) -> bool:
+        # `effective_capacity` is the rep's own cap falling back to their
+        # segment's default; build_plan.py resolves it so every consumer agrees.
+        entry = self.reps.get(rep, {})
+        cap = entry.get("effective_capacity")
+        if cap in (None, "", 0):
+            cap = entry.get("capacity")
+        if cap in (None, "", 0):
+            return True
+        return self.n_accounts.get(rep, 0) < to_int(cap)
+
+    def most_underloaded(self) -> str:
+        """Lightest book with room. Ties by name → deterministic."""
+        candidates = [r for r in sorted(self.sum_score) if self.has_capacity(r)]
+        if not candidates:
+            return ""
+        return min(candidates, key=lambda r: (self.sum_score[r], r))
+
+    def donors_desc(self) -> list[str]:
+        return sorted(self.sum_score, key=lambda r: (-self.sum_score[r], r))
+
+
+def _is_movable(row: dict[str, Any]) -> bool:
+    """An already-owned account that may be reassigned by the balancer."""
+    return (
+        not truthy(row.get("worked"))
+        and str(row.get("proposal_status") or "") not in FROZEN_STATUSES
+        and not str(row.get("proposed_owner") or "")
+        and str(row.get("account_category")) not in WHITESPACE_CATEGORIES
+        and str(row.get("account_category")) != "customer"
+        and not truthy(row.get("double_allocated"))
+        and bool(effective_owner(row))
+    )
+
+
+def _propose(row: dict[str, Any], new_owner: str, reason: str) -> None:
+    row["proposed_owner"] = new_owner
+    row["proposal_reason"] = reason
+    row["proposal_status"] = "suggested"
+
+
+def suggest_moves(
+    plan: dict[str, Any], rows: list[dict[str, Any]], reset: bool = False
+) -> dict[str, Any]:
+    """Run the four move phases over `rows`, in place. Returns a report.
+
+    Deterministic: same rows + same plan → byte-identical proposals. No RNG;
+    every tie breaks on `org_id`.
+
+    Phases run least-disruptive-first — misfit, unallocated, whitespace, then
+    rebalance — because moving an account someone already has a relationship
+    with costs more than assigning one nobody owns. The hard constraint
+    everywhere: an account with activity is NEVER proposed for a move.
+
+    Decisions the user already made (accepted / rejected / manual) survive
+    unless `reset`, so re-running after a review session refines the plan
+    instead of undoing it.
+    """
+    segments = plan["segments"]
+    all_reps = [r for r in plan["reps"] if r.get("is_rep")]
+    # A player-coach owns accounts but is not part of the fairness maths, so
+    # they are neither donor nor recipient: excluding them from the books keeps
+    # them off both sides of every proposed move.
+    reps = [r for r in all_reps if rep_in_balance(r)]
+    coach_names = {r["name"] for r in all_reps if not rep_in_balance(r)}
+    policy = plan.get("move_policy") or {}
+    cv_stop = to_float(policy.get("cv_stop"), CV_STOP)
+    max_move_frac = to_float(policy.get("max_move_frac"), MAX_MOVE_FRAC)
+    balance_cats = set(
+        (plan.get("balance") or {}).get("include_categories", DEFAULT_BALANCE_CATEGORIES)
+    )
+
+    for row in rows:
+        status = str(row.get("proposal_status") or "")
+        if reset or status == "suggested":
+            row["proposed_owner"] = ""
+            row["proposal_reason"] = ""
+            row["proposal_status"] = ""
+
+    reps_by_segment: dict[str, list[dict[str, Any]]] = {}
+    for r in reps:
+        reps_by_segment.setdefault(str(r.get("segment") or ""), []).append(r)
+
+    books = {
+        seg["key"]: Books(reps_by_segment.get(seg["key"], []), rows, balance_cats)
+        for seg in segments
+    }
+    cv_before = {k: b.cv() for k, b in books.items()}
+    counts = {"misfit": 0, "assign_unallocated": 0, "assign_whitespace": 0, "rebalance": 0}
+    skipped_worked_misfits = 0
+    skipped_coach_misfits = 0
+
+    def rows_sorted(pred) -> list[dict[str, Any]]:
+        return sorted(
+            [r for r in rows if pred(r)],
+            key=lambda r: (-to_float(r.get("score")), str(r.get("org_id"))),
+        )
+
+    # --- Phase 1: misfits ----------------------------------------------------
+    # Customers ARE eligible here, unlike in the rebalance phase. The difference
+    # is principled: a misfit move is a correctness fix (an enterprise account
+    # sitting with a commercial rep belongs with the enterprise team, and that is
+    # as true for a customer as a prospect), while rebalancing is an optimisation
+    # — and churning a customer purely to even out a spreadsheet is exactly the
+    # move that costs a renewal.
+    for row in rows_sorted(lambda r: truthy(r.get("segment_misfit"))):
+        if truthy(row.get("worked")):
+            skipped_worked_misfits += 1
+            continue
+        # A player-coach's book is deliberately odd-shaped — that is why they
+        # were excluded from balance — so "wrong segment" is not evidence of a
+        # mistake there, and stripping their accounts would contradict it.
+        if effective_owner(row) in coach_names:
+            skipped_coach_misfits += 1
+            continue
+        if str(row.get("proposal_status") or "") in FROZEN_STATUSES:
+            continue
+        target_seg = str(row.get("account_segment") or "")
+        from_seg = str(row.get("rep_segment") or "")
+        target = books.get(target_seg)
+        if not target:
+            continue
+        new_owner = target.most_underloaded()
+        old_owner = effective_owner(row)
+        if not new_owner or new_owner == old_owner:
+            continue
+        score = to_float(row.get("score"))
+        if str(row.get("account_category")) in balance_cats:
+            if from_seg in books:
+                books[from_seg].remove(old_owner, score)
+            target.add(new_owner, score)
+        _propose(row, new_owner, "misfit")
+        counts["misfit"] += 1
+
+    # --- Phase 2 + 3: assign unowned accounts, then net-new whitespace -------
+    for reason, pred in (
+        (
+            "assign_unallocated",
+            lambda r: truthy(r.get("unallocated"))
+            and str(r.get("account_category")) not in WHITESPACE_CATEGORIES,
+        ),
+        (
+            "assign_whitespace",
+            lambda r: str(r.get("account_category")) in WHITESPACE_CATEGORIES,
+        ),
+    ):
+        for row in rows_sorted(pred):
+            if str(row.get("proposal_status") or "") in FROZEN_STATUSES or row.get(
+                "proposed_owner"
+            ):
+                continue
+            seg = str(row.get("account_segment") or "")
+            book = books.get(seg)
+            if not book:
+                continue
+            new_owner = book.most_underloaded()
+            if not new_owner:
+                continue
+            score = to_float(row.get("score"))
+            # Newly assigned accounts count toward the book immediately, so the
+            # next assignment goes to whoever is now lightest — this is what
+            # spreads a batch of unowned accounts instead of dumping them all on
+            # one rep.
+            book.add(new_owner, score)
+            _propose(row, new_owner, reason)
+            counts[reason] += 1
+
+    # --- Phase 4: rebalance ---------------------------------------------------
+    for seg in segments:
+        key = seg["key"]
+        book = books[key]
+        if len(book.sum_score) < 2:
+            continue
+        seg_rows = [r for r in rows if str(r.get("account_segment")) == key]
+        max_moves = int(max_move_frac * len(seg_rows))
+        moved = 0
+        exhausted: set[str] = set()
+        while moved < max_moves and book.cv() > cv_stop:
+            donor = next((d for d in book.donors_desc() if d not in exhausted), "")
+            recipient = book.most_underloaded()
+            if not donor or not recipient or donor == recipient:
+                break
+            gap = book.sum_score[donor] - book.sum_score[recipient]
+            if gap <= 0:
+                break
+            candidates = [
+                r for r in seg_rows if _is_movable(r) and effective_owner(r) == donor
+            ]
+            if not candidates:
+                exhausted.add(donor)
+                continue
+            # The account that most nearly halves the gap: after the move the
+            # difference becomes |gap - 2*score|, so minimise that.
+            best = min(
+                candidates,
+                key=lambda r: (abs(gap - 2 * to_float(r.get("score"))), str(r.get("org_id"))),
+            )
+            score = to_float(best.get("score"))
+            if abs(gap - 2 * score) >= gap:
+                # Every remaining account is too big to help — moving it would
+                # just invert the imbalance.
+                exhausted.add(donor)
+                continue
+            book.remove(donor, score)
+            book.add(recipient, score)
+            _propose(best, recipient, "rebalance")
+            counts["rebalance"] += 1
+            moved += 1
+
+    # Report the after-CV from a full recompute over the proposed allocation,
+    # NOT from the incremental `books`. The greedy state deliberately counts
+    # newly-assigned whitespace so successive assignments spread across reps,
+    # but whitespace is outside the balance categories — so only a clean
+    # book_stats pass matches what the app displays.
+    proposed_rows = [
+        dict(r, owner=(r.get("proposed_owner") or r.get("owner"))) for r in rows
+    ]
+    # `all_reps` here, not `reps`: book_stats itself drops player-coaches from
+    # the CV, but they must still appear in the per-rep breakdown.
+    after_stats = book_stats(proposed_rows, all_reps, balance_cats)
+
+    # Unowned accounts the caps refused to place. Silence here would read as
+    # "everything found a home", which is the opposite of the truth.
+    unrouted: dict[str, int] = {}
+    for seg in segments:
+        key = seg["key"]
+        left = sum(
+            1
+            for r in rows
+            if str(r.get("account_segment")) == key
+            and truthy(r.get("unallocated"))
+            and not r.get("proposed_owner")
+        )
+        if left:
+            unrouted[key] = left
+
+    return {
+        "counts": counts,
+        "total": sum(counts.values()),
+        "cv_before": cv_before,
+        "after_stats": after_stats,
+        "skipped_worked_misfits": skipped_worked_misfits,
+        "skipped_coach_misfits": skipped_coach_misfits,
+        "coach_names": sorted(coach_names),
+        "unrouted": unrouted,
+        "frozen": sum(
+            1 for r in rows if str(r.get("proposal_status") or "") in FROZEN_STATUSES
+        ),
+    }

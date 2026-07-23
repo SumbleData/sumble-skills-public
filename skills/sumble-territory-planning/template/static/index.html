@@ -29,14 +29,43 @@
     </header>
 
     <main class="terr-layout">
-      <nav class="tabs" role="tablist">
-        <button class="tab active" data-tab="overview" role="tab">Overview</button>
-        <button class="tab" data-tab="reps" role="tab">Reps</button>
-        <button class="tab" data-tab="accounts" role="tab">Accounts</button>
-        <button class="tab" data-tab="moves" role="tab">Moves <span id="moves-badge" class="tab-badge"></span></button>
-        <button class="tab" data-tab="export" role="tab">Export</button>
-      </nav>
-      <p id="tab-description" class="tab-description"></p>
+      <!-- ================= Calibrate sidebar ================= -->
+      <aside class="calibrate-panel" id="calibrate-panel">
+        <div class="panel-header">
+          <h2>Calibrate</h2>
+        </div>
+        <p class="panel-sub">
+          The two judgement calls in a territory plan: where the segment line
+          sits, and how many accounts each rep should carry. They preview live as
+          you type; leaving a field (or pressing Enter) re-runs the balancer.
+        </p>
+        <div id="calibrate-controls" class="calibrate-controls"></div>
+        <p id="calibrate-status" class="calibrate-status"></p>
+
+        <div class="cal-box strong-box">
+          <h4 class="cal-box-title">Strong-account cutoff</h4>
+          <p class="cal-box-sub">
+            An account counts as "strong" for the attention flags if it's in the
+            top N by ICP score. Updates the flags live — no re-suggest needed.
+          </p>
+          <label class="cal-field">
+            <span>Top N by score</span>
+            <input type="number" min="1" step="1" id="strong-cutoff" class="terr-input" />
+          </label>
+        </div>
+
+        <div class="calibrate-actions">
+          <button id="calibrate-reset-fields" class="btn-link" type="button">Reset fields</button>
+        </div>
+      </aside>
+
+      <section class="terr-main">
+        <nav class="tabs" role="tablist">
+          <button class="tab active" data-tab="overview" role="tab">Overview</button>
+          <button class="tab" data-tab="accounts" role="tab">Accounts</button>
+          <button class="tab" data-tab="export" role="tab">Export</button>
+        </nav>
+        <p id="tab-description" class="tab-description"></p>
 
       <!-- ================= Overview ================= -->
       <section id="view-overview" class="view">
@@ -44,17 +73,6 @@
         <h3 class="terr-h3">Accounts needing attention</h3>
         <p class="eval-diag-sub">Click any card to open that set in the Accounts tab.</p>
         <div id="highlight-cards" class="highlight-cards"></div>
-      </section>
-
-      <!-- ================= Reps ================= -->
-      <section id="view-reps" class="view hidden">
-        <p class="eval-diag-sub" id="reps-note"></p>
-        <div class="table-wrap">
-          <table id="reps-table">
-            <thead></thead>
-            <tbody></tbody>
-          </table>
-        </div>
       </section>
 
       <!-- ================= Accounts ================= -->
@@ -79,12 +97,6 @@
         </div>
       </section>
 
-      <!-- ================= Moves ================= -->
-      <section id="view-moves" class="view hidden">
-        <div id="moves-balance" class="moves-balance"></div>
-        <div id="moves-groups"></div>
-      </section>
-
       <!-- ================= Export ================= -->
       <section id="view-export" class="view hidden">
         <div id="export-summary" class="export-summary"></div>
@@ -99,6 +111,7 @@
             <tbody></tbody>
           </table>
         </div>
+      </section>
       </section>
     </main>
 

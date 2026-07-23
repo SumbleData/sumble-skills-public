@@ -57,16 +57,83 @@ class State:
                 f"{self.csv_path.name} not found — run merge_territory.py first."
             )
         self.rows: list[dict[str, Any]] = tl.read_csv(self.csv_path)
-        self.by_id: dict[str, dict[str, Any]] = {
-            str(r.get("org_id")): r for r in self.rows
-        }
+        self.by_id: dict[str, dict[str, Any]] = {str(r.get("org_id")): r for r in self.rows}
 
     # -- persistence -------------------------------------------------------
 
     def save(self) -> None:
         tl.write_csv(self.csv_path, self.rows, tl.TERRITORY_COLUMNS)
 
-    def decide(self, org_id: str, status: str, proposed_owner: str | None) -> dict[str, Any]:
+    def save_plan(self) -> None:
+        tl.write_json(PLAN_PATH, self.plan)
+
+    # -- calibration -------------------------------------------------------
+
+    def calibrate(
+        self,
+        thresholds: dict[str, Any] | None,
+        capacities: dict[str, Any] | None,
+        reset: bool = False,
+    ) -> dict[str, Any]:
+        """Move the segment boundary and/or the per-segment capacity, then
+        re-derive everything downstream.
+
+        This is the whole point of the app being a calibration tool rather than
+        a report: the boundary decides which segment an account is in (and so
+        what counts as a misfit), and capacity decides how many accounts a rep
+        can absorb. Both are judgement calls that only make sense to tune while
+        watching the books move.
+
+        Runs the SAME `territory_lib.suggest_moves` engine the CLI runs, so the
+        app can never drift from the pipeline. Decisions the user has already
+        made survive unless `reset` is asked for.
+        """
+        segments = self.plan["segments"]
+        seg_keys = {str(s["key"]) for s in segments}
+
+        if thresholds:
+            existing = {str(t["segment"]): t for t in self.plan["boundary"]["thresholds"]}
+            for key, value in thresholds.items():
+                if str(key) not in seg_keys:
+                    raise ValueError(f"unknown segment: {key!r}")
+                if str(value).strip() == "":
+                    existing.pop(str(key), None)
+                    continue
+                val = tl.to_float(value)
+                if val < 0:
+                    raise ValueError("a segment threshold cannot be negative")
+                existing[str(key)] = {"segment": str(key), "min": val}
+            if not existing:
+                raise ValueError(
+                    "at least one segment needs a threshold, or every account "
+                    "lands in the smallest segment"
+                )
+            self.plan["boundary"]["thresholds"] = sorted(
+                existing.values(), key=lambda t: -tl.to_float(t["min"])
+            )
+
+        if capacities:
+            for key, value in capacities.items():
+                if str(key) not in seg_keys:
+                    raise ValueError(f"unknown segment: {key!r}")
+                for seg in segments:
+                    if str(seg["key"]) == str(key):
+                        blank = str(value).strip() == ""
+                        seg["default_capacity"] = None if blank else tl.to_int(value)
+            # A rep's own capacity still wins; re-resolve so the mover and the
+            # UI read the same number.
+            for rep in self.plan["reps"]:
+                rep["effective_capacity"] = tl.effective_capacity(rep, segments)
+
+        tl.recompute_segments(self.plan, self.rows)
+        report = tl.suggest_moves(self.plan, self.rows, reset=reset)
+        self.save()
+        self.save_plan()
+        return report
+
+    def decide(
+        self, org_id: str, status: str, proposed_owner: str | None
+    ) -> dict[str, Any]:
         row = self.by_id.get(str(org_id))
         if row is None:
             raise KeyError(org_id)
@@ -99,9 +166,19 @@ class State:
         """Every approved change, as a CRM-ready sheet. Accepted suggestions and
         manual overrides both count — they are the same instruction to the CRM."""
         cols = [
-            "org_id", "name", "domain", "crm_account_id", "account_segment",
-            "from_owner", "to_owner", "reason", "score", "size_metric",
-            "meetings", "calls", "emails_out",
+            "org_id",
+            "name",
+            "domain",
+            "crm_account_id",
+            "account_segment",
+            "from_owner",
+            "to_owner",
+            "reason",
+            "score",
+            "size_metric",
+            "meetings",
+            "calls",
+            "emails_out",
         ]
         buf = io.StringIO()
         w = csv.DictWriter(buf, fieldnames=cols, extrasaction="ignore")
@@ -111,21 +188,23 @@ class State:
                 continue
             if not str(r.get("proposed_owner") or ""):
                 continue
-            w.writerow({
-                "org_id": r.get("org_id"),
-                "name": r.get("name"),
-                "domain": r.get("domain"),
-                "crm_account_id": r.get("crm_account_id"),
-                "account_segment": r.get("account_segment"),
-                "from_owner": r.get("owner") or "(unassigned)",
-                "to_owner": r.get("proposed_owner"),
-                "reason": r.get("proposal_reason"),
-                "score": r.get("score"),
-                "size_metric": r.get("size_metric"),
-                "meetings": r.get("meetings"),
-                "calls": r.get("calls"),
-                "emails_out": r.get("emails_out"),
-            })
+            w.writerow(
+                {
+                    "org_id": r.get("org_id"),
+                    "name": r.get("name"),
+                    "domain": r.get("domain"),
+                    "crm_account_id": r.get("crm_account_id"),
+                    "account_segment": r.get("account_segment"),
+                    "from_owner": r.get("owner") or "(unassigned)",
+                    "to_owner": r.get("proposed_owner"),
+                    "reason": r.get("proposal_reason"),
+                    "score": r.get("score"),
+                    "size_metric": r.get("size_metric"),
+                    "meetings": r.get("meetings"),
+                    "calls": r.get("calls"),
+                    "emails_out": r.get("emails_out"),
+                }
+            )
         return buf.getvalue().encode("utf-8")
 
 
@@ -182,7 +261,7 @@ class Handler(SimpleHTTPRequestHandler):
     def do_POST(self) -> None:  # noqa: N802 (stdlib name)
         if not self._require_auth():
             return
-        if self.path != "/api/decide":
+        if self.path not in ("/api/decide", "/api/calibrate"):
             self.send_error(404, "not found")
             return
         try:
@@ -191,6 +270,25 @@ class Handler(SimpleHTTPRequestHandler):
         except (ValueError, json.JSONDecodeError) as e:
             self.send_error(400, f"bad request: {e}")
             return
+
+        if self.path == "/api/calibrate":
+            try:
+                with _LOCK:
+                    report = STATE.calibrate(
+                        body.get("thresholds") or {},
+                        body.get("capacities") or {},
+                        reset=bool(body.get("reset")),
+                    )
+            except ValueError as e:
+                self.send_error(400, str(e))
+                return
+            except OSError as e:
+                self.send_error(500, f"could not write the plan: {e}")
+                return
+            return self._send_json(
+                {"ok": True, "report": report, "plan": STATE.plan, "rows": STATE.rows}
+            )
+
         try:
             with _LOCK:
                 row = STATE.decide(

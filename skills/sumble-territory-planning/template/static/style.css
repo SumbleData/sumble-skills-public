@@ -1355,9 +1355,21 @@ th.sortable .th-sort-label {
    ========================================================================== */
 
 .terr-layout {
+  display: grid;
+  grid-template-columns: 340px minmax(0, 1fr);
+  gap: 18px;
   padding: 18px;
-  max-width: 1500px;
+  max-width: 1600px;
   margin: 0 auto;
+  align-items: start;
+}
+
+.terr-main { min-width: 0; }
+
+/* Stack the sidebar above the content on narrow screens. */
+@media (max-width: 900px) {
+  .terr-layout { grid-template-columns: 1fr; }
+  .calibrate-panel { position: static; max-height: none; }
 }
 
 .view {
@@ -1406,6 +1418,25 @@ th.sortable .th-sort-label {
   font: inherit;
 }
 
+/* Inline "Assign to" control in the Accounts table — one dropdown does it all. */
+.assign-cell { min-width: 210px; }
+.assign-wrap { display: flex; align-items: center; gap: 8px; }
+.assign-select {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 4px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+/* Pending suggestion: tint the closed control so it's spottable at a glance. */
+.assign-select.has-suggestion {
+  background: rgba(0, 166, 62, 0.10);
+  border-color: var(--accent);
+}
+/* Applied (accepted / manual): a quiet accent so a changed row reads as done. */
+.assign-select.changed { border-left: 3px solid var(--accent); }
+.assign-wrap .undo-link { white-space: nowrap; }
+
 /* --- segment balance cards --- */
 .seg-card {
   border: 1px solid var(--border);
@@ -1440,6 +1471,100 @@ th.sortable .th-sort-label {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* ---- Calibrate sidebar ------------------------------------------------ */
+.calibrate-panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  padding: 16px;
+  position: sticky;
+  top: 18px;
+  max-height: calc(100vh - 100px);
+  overflow-y: auto;
+}
+
+.calibrate-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 4px 0 14px;
+}
+.cal-box {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px;
+}
+.cal-box-title { margin: 0 0 2px; font-size: 13px; font-weight: 650; }
+.cal-box-sub {
+  margin: 0 0 10px;
+  font-size: 11px;
+  color: var(--fg-dim);
+  line-height: 1.4;
+}
+.cal-warn { color: #B91C1C; font-weight: 600; }
+.cal-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.cal-field > span { font-size: 12px; color: var(--fg-dim); }
+.terr-input {
+  width: 96px;
+  padding: 4px 8px;
+  font: inherit;
+  font-size: 13px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+}
+.terr-input:disabled { opacity: 0.45; }
+.cal-preview { margin: 8px 0 0; font-size: 12px; color: var(--fg-dim); line-height: 1.4; }
+
+.calibrate-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.calibrate-reset {
+  font-size: 12px;
+  color: var(--fg-dim);
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 12px;
+  line-height: 1.4;
+}
+.calibrate-status { font-size: 12px; margin: 10px 0 0; min-height: 1em; }
+
+/* Reassign control in the account detail panel. */
+.detail-reassign {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.detail-reassign label { font-size: 12px; color: var(--fg-dim); }
+
+/* A rep shown but excluded from the balance maths (player-coach). Muted so the
+   eye reads the measured books first, but still legible — the point is that
+   their book stays visible. */
+.bar-row-coach .bar-fill { opacity: 0.55; }
+.bar-coach {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--fg-dim);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0 4px;
+  white-space: nowrap;
 }
 
 .bar-track {
@@ -1533,6 +1658,91 @@ th.sortable:hover { color: var(--accent); }
 .rep-row { cursor: pointer; }
 .rep-row:hover td { background: var(--accent-soft); }
 #accounts-table tbody tr { cursor: pointer; }
+
+/* ---- Reps: per-rep book-depth cards ----------------------------------- */
+.terr-sub { font-size: 12px; font-weight: 400; color: var(--fg-dim); }
+
+#reps-cards { margin-top: 10px; }
+#reps-cards .terr-h3 { margin: 18px 0 6px; }
+.matrix-sub { font-size: 12px; color: var(--fg-dim); margin: 8px 0 4px; }
+
+/* Breathing room between a matrix table and the next section heading. */
+#overview-segments .table-wrap { margin-bottom: 22px; }
+#view-overview .terr-h3 { margin-top: 26px; }
+#view-overview .terr-h3:first-child { margin-top: 8px; }
+
+/* Segment filter — a segmented control that swaps which segment's two matrices
+   show, instead of stacking every segment's tables. */
+.seg-filter { display: flex; gap: 8px; margin: 12px 0 4px; flex-wrap: wrap; }
+.seg-pill {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-card);
+  color: var(--fg);
+  cursor: pointer;
+}
+.seg-pill:hover { border-color: var(--accent); }
+.seg-pill.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.seg-pill-sub { font-size: 11px; font-weight: 400; opacity: 0.7; }
+
+.matrix-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  border: 1px solid var(--border);
+}
+.matrix-table th {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--fg-dim);
+  text-align: left;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.matrix-table th.num, .matrix-table td.num { text-align: right; }
+.matrix-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  border-left: 1px solid var(--border);
+}
+.matrix-table td:first-child, .matrix-table th:first-child { border-left: 0; }
+.matrix-table tbody tr:last-child td { border-bottom: 0; }
+.matrix-table tr.rep-row { cursor: pointer; }
+.matrix-table tr.rep-row:hover td:first-child { text-decoration: underline; }
+.matrix-empty { color: var(--fg-dim); opacity: 0.4; }
+
+/* Segment column inside a matrix (only present when >1 segment is displayed). */
+.matrix-table .seg-cell { font-size: 12px; color: var(--fg-dim); white-space: nowrap; }
+
+/* Capture / Activation summary column — set off from the depth bands. */
+.matrix-table .summary-cell { font-weight: 650; border-right: 2px solid var(--border); }
+.matrix-table th:nth-child(1) { min-width: 8ch; }
+
+/* Sortable matrix headers. */
+.matrix-table th.sortable { cursor: pointer; user-select: none; }
+.matrix-table th.sortable:hover { color: var(--fg); }
+.matrix-table th.sorted { color: var(--accent); }
+
+/* Info icon carrying a metric's intuition (native tooltip; multi-line via \n). */
+.col-info {
+  cursor: help;
+  color: var(--fg-dim);
+  font-weight: 400;
+  font-size: 11px;
+  opacity: 0.75;
+}
+.col-info:hover { opacity: 1; color: var(--accent); }
+
+/* Conditional formatting is a translucent green applied inline per cell
+   (heatStyleAttr in app.js), matching gtm.sumble.com/account-scores:
+   rgba(0,166,62, 0.05 + 0.4*strength). No classes needed here. */
 #accounts-table tbody tr:hover td { background: var(--bg); }
 
 .proposed { font-weight: 600; }
@@ -1578,6 +1788,18 @@ th.sortable:hover { color: var(--accent); }
 }
 .btn-accept:hover, .btn-accept.on { background: var(--accent); border-color: var(--accent); color: #fff; }
 .btn-reject:hover, .btn-reject.on { background: var(--penalty); border-color: var(--penalty); color: #fff; }
+.decide-btn { cursor: pointer; }
+
+/* Inline accept/reject in the Accounts "Proposed owner" column. */
+.row-actions { display: flex; gap: 6px; margin-top: 4px; }
+.row-actions .decide-btn { margin-left: 0; padding: 3px 10px; }
+.undo-link {
+  border: 0; background: none; padding: 0; margin-left: 0;
+  font-size: 11px; font-weight: 500; color: var(--accent);
+  text-decoration: underline; cursor: pointer;
+}
+/* The suggested-move filter chip, tinted to read as an action rather than a flag. */
+.cat-chip-move.active { border-color: var(--accent); }
 
 .empty-state { color: var(--fg-dim); padding: 14px 0; }
 

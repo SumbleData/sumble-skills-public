@@ -262,17 +262,10 @@ def main() -> None:
             "proposal_status": "",
         })
 
-    # strong_idle needs each segment's own p75: "strong" means strong for the
-    # kind of company it is, so an enterprise cutoff isn't applied to SMB books.
-    for seg in {r["account_segment"] for r in rows}:
-        scored = [
-            r["score"] for r in rows
-            if r["account_segment"] == seg and r["account_category"] not in WHITESPACE_CATEGORIES
-        ]
-        p75 = tl.percentile(scored, 0.75)
-        for r in rows:
-            if r["account_segment"] == seg and r["score"] >= p75 and not r["worked"] and r["owner"]:
-                r["strong_idle"] = 1
+    # account_segment / segment_misfit / strong_idle all hang off the boundary,
+    # so they are derived by the same shared routine the app's Calibrate panel
+    # calls when the line moves. One implementation, no drift.
+    tl.recompute_segments(plan, rows)
 
     # Trim whitespace to the routing depth — the rest is an account-scoring
     # question, not a territory one, and would swamp the sheet.
@@ -315,7 +308,12 @@ def main() -> None:
         "activity_window_days": window,
         "counts": counts,
         "balance": {
-            k: {"cv": round(v["cv"], 4), "label": v["label"], "reps": len(v["reps"])}
+            k: {
+                "cv": round(v["cv"], 4),
+                "label": v["label"],
+                "reps": len(v["reps"]),
+                "reps_in_balance": v.get("n_in_balance", len(v["reps"])),
+            }
             for k, v in balance.items()
         },
     })
@@ -327,7 +325,18 @@ def main() -> None:
         f"{counts['not_worked']:,} not worked · {counts['strong_idle']:,} strong-but-idle"
     )
     for seg, b in sorted(balance.items()):
-        print(f"[merge] balance · {seg}: CV {b['cv']:.2f} ({b['label']}) across {len(b['reps'])} reps")
+        n = b.get("n_in_balance", len(b["reps"]))
+        extra = f" ({len(b['reps'])} shown)" if len(b["reps"]) != n else ""
+        if n < 2:
+            print(
+                f"[merge] balance · {seg}: only {n} rep counted{extra} — CV is not a "
+                "fairness reading with fewer than two measured books."
+            )
+        else:
+            print(
+                f"[merge] balance · {seg}: CV {b['cv']:.2f} ({b['label']}) "
+                f"across {n} reps{extra}"
+            )
     if unresolved:
         print(
             f"[merge] NOTE: {unresolved:,} ownership rows didn't match any org in the "
