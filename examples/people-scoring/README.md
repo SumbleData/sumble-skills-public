@@ -1,6 +1,6 @@
 # People scoring — Sumble's own run (example)
 
-A real, runnable app the [`sumble-people-scoring`](../)
+A real, runnable app the [`sumble-people-scoring`](../../skills/sumble-people-scoring)
 skill produced, pointed at Sumble's own ICP: **everyone Head-and-above in five
 GTM job functions, across a random sample of 100 of Sumble's target
 accounts** — 4,218 people, met or not.
@@ -27,7 +27,7 @@ Stock Python 3.10+, stdlib only — no `pip install`.
 
 - `data.csv` — the immutable pull: identity, function, seniority, matched
   skills (from the v6 `technologies` attribute), and the account score joined
-  from the [account-scoring example](../../sumble-account-scoring/example)'s model.
+  from the [account-scoring example](../account-scoring)'s model.
 - `config.json` — the scoring config the skill generated (weights, per-function
   ranges, skill cap).
 - `score.csv` — regenerated on every Save and at startup (gitignored).
@@ -44,7 +44,7 @@ Stock Python 3.10+, stdlib only — no `pip install`.
   director at a top account outranks the same title at a weak one.
 
 The method is written up in
-[the people-scoring article](../articles/01-people-scoring-use-cases.md).
+[the people-scoring article](../../skills/sumble-people-scoring/articles/01-people-scoring-use-cases.md).
 
 ## Deploy
 
@@ -55,7 +55,7 @@ into the same GCP project that hosts the account demo (where `sumble.com` is
 verified for domain mapping):
 
 ```bash
-cd sumble-skills/skills/sumble-people-scoring/example
+cd sumble-skills/examples/people-scoring
 
 # 1. Deploy the service.
 gcloud run deploy sumble-people-scoring-demo \

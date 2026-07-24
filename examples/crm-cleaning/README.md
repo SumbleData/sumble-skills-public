@@ -1,6 +1,6 @@
 # Example: CRM cleaning (Sumble's own CRM)
 
-A real, runnable example of what the [`sumble-crm-cleaning`](../) skill produces
+A real, runnable example of what the [`sumble-crm-cleaning`](../../skills/sumble-crm-cleaning) skill produces
 — run against Sumble's own Salesforce (1,236 accounts, ~10 minutes, ~5 Sumble
 API credits per account). Review duplicate clusters and hierarchy gaps, pick a
 primary per duplicate, and export the change list.
@@ -74,4 +74,4 @@ npx skills add SumbleData/sumble-skills-public --skill sumble-crm-cleaning
 ```
 
 The method is written up in
-[Clean your CRM against an org graph](../articles/01-clean-your-crm-against-the-org-graph.md).
+[Clean your CRM against an org graph](../../skills/sumble-crm-cleaning/articles/01-clean-your-crm-against-the-org-graph.md).

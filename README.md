@@ -46,12 +46,11 @@ accounts that scored well.
 
 ### See it in action
 
-Each skill ships a real, runnable example next to it, under
-`skills/<skill>/example/`.
+Each skill ships a real, runnable example under `examples/`.
 
 **▶ Account scoring — live demo: https://account-scoring-demo.sumble.com/**
 
-[`skills/sumble-account-scoring/example`](skills/sumble-account-scoring/example)
+[`examples/account-scoring`](examples/account-scoring)
 is a real, runnable app the account-scoring skill produced — `python app.py`,
 drag sliders, click through. The account universe is real public companies; the
 "gold" (customer) flags in it are **fictitious and illustrative**, not anyone's
@@ -59,7 +58,7 @@ real customer list.
 
 **▶ CRM cleaning — live demo: https://crm-cleaning-demo.sumble.com/**
 
-[`skills/sumble-crm-cleaning/example`](skills/sumble-crm-cleaning/example) is the
+[`examples/crm-cleaning`](examples/crm-cleaning) is the
 CRM-cleaning skill run against Sumble's own Salesforce — `python3 app.py`, then
 review real duplicate clusters and hierarchy gaps (owner names and customer
 flags are fictitious, opportunity counts removed).
