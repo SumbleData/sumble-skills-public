@@ -21,9 +21,16 @@ import json
 import math
 from pathlib import Path
 
-ENTERPRISE_MIN = 500  # sales_people >= this -> Enterprise
+ENTERPRISE_MIN = 150  # sales_people >= this -> Enterprise
 COMPANY = {"name": "Northwind", "url": "northwind.example", "folder_slug": "northwind"}
 COMPANY_DOMAIN = "northwind.example"
+
+# Target accounts per rep, by segment — the "Target accounts per rep" the
+# Calibrate panel shows. The quotas below are built to land every book inside
+# +-40% of these, so the target is a number a reviewer can actually hold the
+# demo to. The Enterprise line sits at 150 sales people (not 500) so the
+# Enterprise pool is deep enough for 10 reps to carry ~50 accounts each.
+SEGMENT_CAPACITY = {"commercial": 150, "enterprise": 50}
 
 ENTERPRISE_REPS = [
     "Avery Brooks",
@@ -87,42 +94,67 @@ def main() -> None:
     src = list(csv.DictReader(open(args.data, encoding="utf-8")))
     # Keep real accounts with an org id, a domain, and a size signal; drop the
     # source's whitespace rows (net-new, not owned) — the demo is about a book.
-    accts = [
-        r
-        for r in src
-        if r.get("org_id")
-        and r.get("url")
-        and str(r.get("account_category")) != "whitespace"
-    ]
+    # Dedupe on org_id: the source carries a handful of repeats (IBM x3, Oracle,
+    # …) and crm_account_id is derived from org_id, so a repeat would emit two
+    # CRM records for one account — a duplicate the pipeline has no way to tell
+    # from the deliberate double-allocations below.
+    accts, seen_oids = [], set()
+    for r in src:
+        oid = r.get("org_id")
+        if not oid or not r.get("url"):
+            continue
+        if str(r.get("account_category")) == "whitespace" or oid in seen_oids:
+            continue
+        seen_oids.add(oid)
+        accts.append(r)
 
     reps_seg = {n: "enterprise" for n in ENTERPRISE_REPS}
     reps_seg.update({n: "commercial" for n in COMMERCIAL_REPS})
 
-    # Book-share weights per rep: stars carry bigger, stronger books; ramping
-    # reps carry little. This drives the Capture spread, and strong accounts skew
-    # toward the heavier reps (concentration), so the metrics tell a story.
-    # Enterprise is a small segment (few hundred accounts / 10 reps), so keep its
-    # weights close together — otherwise the tail reps end up with 1-2 accounts.
-    ent_weight = dict(
-        zip(ENTERPRISE_REPS, [1.8, 1.6, 1.4, 1.3, 1.2, 1.1, 1.0, 0.95, 0.9, 0.85])
-    )
-    com_weight = dict(
-        zip(COMMERCIAL_REPS, [2.2, 1.9, 1.6, 1.4, 1.2, 1.0, 0.9, 0.8, 0.7, 0.6])
-    )
+    # Per-rep book quotas. Every rep gets EXACTLY this many accounts, so each
+    # book lands inside the +-40% band around its segment target (Enterprise
+    # 30-70, Commercial 90-210) instead of falling out of a weighted lottery,
+    # where the tail reps ended up at a third of target. The spread within the
+    # band is what gives the heatmaps something to show.
+    ENT_QUOTA = {
+        "Chen Wei": 66,       # biggest book in the segment - and barely worked
+        "Dev Ramesh": 47,
+        "Avery Brooks": 43,
+        "Sofia Romano": 40,
+        "Marcus Bell": 38,
+        "Fatima Khan": 36,
+        "Yuki Tanaka": 34,
+        "Liam Novak": 32,
+        "Rosa Alvarez": 31,
+        "Grace Okafor": 30,   # ramping - at the floor of the band
+    }
+    COM_QUOTA = {
+        "Alex Rivera": 180,   # the star: biggest book, and the best worked
+        "Jordan Lee": 128,
+        "Sam Patel": 116,
+        "Priya Nair": 108,
+        "Diego Castro": 100,
+        "Maya Cohen": 96,
+        "Noah Schmidt": 92,
+        "Aisha Bello": 92,
+        "Ravi Menon": 91,
+        "Elena Petrova": 90,  # near the floor
+    }
+    # Books are filled strongest-account-first, so a bias > 1 pulls the segment's
+    # best accounts onto that rep. This is what separates Capture (share of the
+    # best business) from raw book size — without it the two say the same thing.
+    STAR_BIAS = {"Chen Wei": 2.0, "Alex Rivera": 2.0, "Dev Ramesh": 1.3}
 
-    def pick(weights: dict, oid: str, score: float) -> str:
-        items = [(n, w * (1 + (w - 1) * (score / 100.0) * 0.4)) for n, w in weights.items()]
-        total = sum(w for _, w in items)
-        x = h01("pick", oid) * total
-        acc = 0.0
-        for n, w in items:
-            acc += w
-            if x <= acc:
-                return n
-        return items[-1][0]
+    MISFIT_RATE = 0.04  # owned accounts handed to a rep in the OTHER segment
+    KEEP_PROB = {"enterprise": 0.94, "commercial": 0.80}
+    other = {"enterprise": "commercial", "commercial": "enterprise"}
 
     # ---- score.csv + ownership.csv ------------------------------------------
-    score_rows, own_rows = [], []
+    # Pass 1: score every account and decide which ones are owned at all, and by
+    # which rep POOL. Landing in the other segment's pool is the Wrong segment
+    # flag — the balancer proposes handing those back.
+    scored = []  # (oid, src_row, seg, score, sales_people, employees)
+    pool: dict[str, list[tuple[str, float]]] = {"enterprise": [], "commercial": []}
     for r in accts:
         oid = r["org_id"]
         sp = num(r.get("sales_people"))
@@ -132,19 +164,50 @@ def main() -> None:
         # Synthetic ICP score: size-correlated + deterministic variety, 3-98.
         base = 30 + 9 * math.log10(sp + 1) + 5 * math.log10(emp + 1)
         score = max(3.0, min(98.0, base + 22 * h01("score", oid) - 6))
+        scored.append((oid, r, seg, score, sp, emp))
 
-        # Ownership: enterprise reps hold most enterprise accounts; commercial
-        # reps a slice of the much larger commercial pool; the rest unallocated.
-        weights = ent_weight if seg == "enterprise" else com_weight
-        keep_prob = 0.94 if seg == "enterprise" else 0.42
-        owner, owner_email, is_customer = "", "", 0
-        if h01("own", oid) < keep_prob:
-            owner = pick(weights, oid, score)
-            # ~5% misfit: hand it to a rep from the OTHER segment.
-            if h01("misfit", oid) < 0.05:
-                owner = pick(com_weight if seg == "enterprise" else ent_weight, oid, score)
-            owner_email = email(owner)
-            is_customer = 1 if h01("cust", oid) < 0.06 else 0
+        if h01("own", oid) < KEEP_PROB[seg]:
+            target = other[seg] if h01("misfit", oid) < MISFIT_RATE else seg
+            pool[target].append((oid, score))
+
+    # Pass 2: fill each rep's quota from their pool, strongest account first.
+    # Each account goes to a rep drawn in proportion to their REMAINING quota
+    # (times their star bias) — a lottery, not "whoever has most quota left",
+    # which would hand the biggest book the entire top of the segment in one
+    # block and leave every other rep at ~0% Capture. Proportional draw means a
+    # rep's share of every score band tracks their book size, and the bias is
+    # what tilts the best accounts onto the stars. Quotas are met exactly;
+    # whatever the reps don't take (the weakest of the pool) stays unallocated.
+    owner_of: dict[str, str] = {}
+    for seg_key, quota in (("enterprise", ENT_QUOTA), ("commercial", COM_QUOTA)):
+        left = dict(quota)
+        for oid, _ in sorted(pool[seg_key], key=lambda t: (-t[1], t[0])):
+            live = [
+                (n, k * STAR_BIAS.get(n, 1.0)) for n, k in left.items() if k > 0
+            ]
+            if not live:
+                break  # every quota filled - the rest of the pool goes unowned
+            x = h01("assign", oid) * sum(w for _, w in live)
+            acc, best = 0.0, live[-1][0]
+            for n, w in live:
+                acc += w
+                if x <= acc:
+                    best = n
+                    break
+            owner_of[oid] = best
+            left[best] -= 1
+        short = {n: k for n, k in left.items() if k > 0}
+        if short:
+            raise SystemExit(
+                f"[demo] the {seg_key} pool cannot fill its quotas - short by {short}. "
+                f"Raise KEEP_PROB['{seg_key}'] or lower the quotas."
+            )
+
+    score_rows, own_rows = [], []
+    for oid, r, seg, score, sp, emp in scored:
+        owner = owner_of.get(oid, "")
+        owner_email = email(owner) if owner else ""
+        is_customer = 1 if (owner and h01("cust", oid) < 0.06) else 0
 
         category = "customer" if is_customer else ("allocated" if owner else "unallocated")
         dom = str(r["url"]).strip().lower()
@@ -188,6 +251,26 @@ def main() -> None:
         d["owner"] = extra_owner[i]
         d["owner_email"] = email(extra_owner[i])
         own_rows.append(d)
+
+    # Guardrail: the whole point of the quotas. If a book drifts outside +-40%
+    # of its segment target, "Target accounts per rep" in the Calibrate panel is
+    # describing something the demo data doesn't do — fail the build instead of
+    # shipping it.
+    books: dict[str, int] = {}
+    for o in own_rows:
+        if o["owner"]:
+            books[o["owner"]] = books.get(o["owner"], 0) + 1
+    out_of_band = [
+        f"{n} ({seg}): {books.get(n, 0)} vs target {SEGMENT_CAPACITY[seg]}"
+        for n, seg in reps_seg.items()
+        if not (
+            0.6 * SEGMENT_CAPACITY[seg] <= books.get(n, 0) <= 1.4 * SEGMENT_CAPACITY[seg]
+        )
+    ]
+    if out_of_band:
+        raise SystemExit(
+            "[demo] book sizes outside +-40% of target:\n  " + "\n  ".join(out_of_band)
+        )
 
     write_csv(
         raw / "score.csv",
@@ -244,6 +327,7 @@ def main() -> None:
     rep_effort["Grace Okafor"] = 0.03  # ramping enterprise rep - near-idle book
     rep_effort["Chen Wei"] = 0.10  # big book, barely worked (sitting on value)
     rep_effort["Alex Rivera"] = 0.80  # star commercial rep - high activation
+    rep_effort["Dev Ramesh"] = 0.92  # works his whole top tier - Chen Wei's foil
     events = []
     for o in own_rows:
         if not o["owner"]:
@@ -285,13 +369,13 @@ def main() -> None:
                 "key": "commercial",
                 "label": "Commercial",
                 "order": 1,
-                "default_capacity": 150,
+                "default_capacity": SEGMENT_CAPACITY["commercial"],
             },
             {
                 "key": "enterprise",
                 "label": "Enterprise",
                 "order": 2,
-                "default_capacity": 50,
+                "default_capacity": SEGMENT_CAPACITY["enterprise"],
             },
         ],
         "boundary": {
@@ -321,6 +405,13 @@ def main() -> None:
     print(f"[demo] categories: {cats}")
     ne, nc = len(ENTERPRISE_REPS), len(COMMERCIAL_REPS)
     print(f"[demo] reps: {ne} enterprise + {nc} commercial")
+    for seg in ("enterprise", "commercial"):
+        sizes = sorted(
+            (books[n] for n in reps_seg if reps_seg[n] == seg), reverse=True
+        )
+        cap = SEGMENT_CAPACITY[seg]
+        pct = [f"{100 * b // cap}%" for b in sizes]
+        print(f"[demo] {seg} books (target {cap}): {sizes} -> {' '.join(pct)}")
 
 
 if __name__ == "__main__":

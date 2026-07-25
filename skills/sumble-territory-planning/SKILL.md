@@ -1,6 +1,6 @@
 ---
 name: sumble-territory-planning
-description: "Companion to sumble-account-scoring: plan and rebalance sales territories. Interviews the user about their segments (default Enterprise + Commercial) and whether the segment line is a hard rule or should be calibrated from their data, pulls territory ownership from the CRM, and pulls per-rep×account activity (calendar meetings, Gong/Fireflies/Granola calls, Salesforce email) from whatever MCPs are connected. Generates a self-contained, zero-dependency Python + HTML/JS app at territory_planning/{company}/ with per-segment book-strength heatmaps (each rep's top 10/25/50/100/200 accounts by average in-segment rank, plus coverage), a granular account view, highlights for accounts that are not being worked / in the wrong segment / strong-but-unallocated / double-allocated / strong-but-idle (with a live top-N strong-account cutoff), and a suggest→accept/reject→export flow that writes an actions.csv of approved owner changes."
+description: "Companion to sumble-account-scoring: plan and rebalance sales territories. Interviews the user about their segments (default Enterprise + Commercial) and whether the segment line is a hard rule or should be calibrated from their data, pulls territory ownership from the CRM, and pulls per-rep×account activity (calendar meetings, Gong/Fireflies/Granola calls, Salesforce email) from whatever MCPs are connected. Generates a self-contained, zero-dependency Python + HTML/JS app at territory_planning/{company}/ with per-segment book-strength heatmaps (Capture plus each rep's top 25 accounts by average in-segment rank, and a matching coverage table), a granular account view, highlights for accounts that are not being worked / in the wrong segment / strong-but-unallocated / double-allocated / strong-but-idle (with a live top-N strong-account cutoff), and a suggest→accept/reject→export flow that writes an actions.csv of approved owner changes."
 ---
 
 # Territory Planning
@@ -615,19 +615,28 @@ Python 3.10+. Override the port with `python3 app.py 9002` or `PORT=9002`.
 
 Tell them how to work it, in this order:
 
-1. **Overview** — a **rep × depth heatmap** (this is the home page; there is no
-   separate Reps tab). There are always exactly **two tables** (strength +
-   coverage); a **segment filter** at the top (`All segments` by default, plus one
-   pill per segment) narrows the rows — every rep by default, or one segment's when
-   filtered. With `All segments`, a **Segment column** labels each row. Rows are
-   reps, columns are their **top 10 / 25 / 50 / 100 / 200** accounts (plus the whole
-   book), and each cell is the **average rank** of those accounts *within that
-   segment* (1 = best). Conditional formatting shades **green (strong) → pale (weak)
-   down each whole column** (across all rows shown, both segments); a cell is blank
-   when the rep owns fewer than N accounts *in that segment*. **Every header sorts**
-   — click to sort, click again to flip. A second matrix below shows **coverage**
-   (share of each band worked in the window). Below both are the "needs attention"
-   flag cards.
+1. **Overview** — a **rep heatmap** (this is the home page; there is no separate
+   Reps tab). There are always exactly **two tables** (strength + coverage); a
+   **segment filter** at the top (`All segments` by default, plus one pill per
+   segment) narrows the rows — every rep by default, or one segment's when
+   filtered. With `All segments`, a **Segment column** labels each row.
+
+   Rows are reps. Each table leads with its summary metric (below), then a single
+   **Top 25** depth column: the **average rank** of the rep's 25 strongest accounts
+   *within that segment* (1 = best) in the strength table, and the **share of those
+   25 worked** in the coverage table. Coverage adds a **Whole book** column (share
+   of everything they own that's been touched); strength does not — an average rank
+   over a whole book is dragged around by book size and invites a cross-rep
+   comparison it can't support. Keep it at one band: the earlier
+   10/25/50/100/200 ladder asked a reviewer to hold five numbers per rep in their
+   head and read a trend across them, and RevOps users read it as noise. The top 25
+   is the tier a rep actually works.
+
+   Conditional formatting shades **green (strong) → pale (weak) down each whole
+   column** (across all rows shown, both segments); a cell is blank when the rep
+   owns fewer than 25 accounts *in that segment*. **Every header sorts** — click to
+   sort, click again to flip. Below both tables sits the **suggested-moves CTA**
+   (see 3) and then the "also worth a look" flag cards.
 
    Each matrix leads with a **summary column** — the headline metric, and the
    default sort (descending). Both are weighted to the segment's best accounts, and
@@ -675,9 +684,17 @@ Tell them how to work it, in this order:
    score) count as "strong" for the *strong-but-idle* and *strong-but-unallocated*
    attention flags. Unlike the two dials above it updates the flags **live** — it
    doesn't touch the mover, so there's no Apply.
-3. **Fix the double-allocations first.** Two reps on one company distorts every
+3. **Review suggested moves** — the primary call to action. On **Overview** it's a
+   full-width button below the two matrices showing the pending count; clicking it
+   lands on Accounts with the queue filtered. On **Accounts** the filters are two
+   rows: a **primary row** (`All` · `✨ Suggested moves`) over a quieter
+   **secondary row** of the five attention flags. The flags are diagnostics you
+   browse; the queue is what you clear, and the layout should say so. (It used to
+   be one chip at the end of a row of six, which is where most reviewers failed to
+   find it.) The flags stay multi-select and OR together, unchanged.
+4. **Fix the double-allocations first.** Two reps on one company distorts every
    other number.
-4. **Accounts** — every account, sortable, with a **Rank** column (global rank by
+5. **Accounts** — every account, sortable, with a **Rank** column (global rank by
    ICP score, 1 = best; ties to the strong-account cutoff). The last column,
    **Assign to**, is an owner dropdown on *every* row: allocate any account to
    anyone (or unassign), which records a manual move. Because the whole app groups
@@ -688,9 +705,9 @@ Tell them how to work it, in this order:
    sits at the top of the same dropdown marked "suggested" (picking it accepts,
    preserving the reason), the control is tinted, and a tiny **dismiss** link
    rejects it — one control, no separate accept/reject buttons or Moves tab. The
-   **Suggested move** filter chip narrows to the pending suggestions. Nothing is
+   CTA at the top of the tab narrows to the pending suggestions. Nothing is
    written to a CRM — Export is the hand-off.
-5. **Export** — every approved change (accepted suggestion or manual assignment),
+6. **Export** — every approved change (accepted suggestion or manual assignment),
    with a per-row **Dismiss** to drop one without leaving the tab (it reverts the
    account). `actions.csv` is the hand-off to the CRM. **This app never writes to
    your CRM.**
