@@ -39,7 +39,7 @@ const state = {
 };
 
 const PAGE_DESCRIPTIONS = {
-  overview: "Each rep's book strength by depth — how strong their top accounts are, and how much of each band they're working — plus what needs attention. Click a rep to open their accounts.",
+  overview: "How much of the segment's best business each rep holds (Capture), and how much of it they're working (Activation) — plus what needs attention. Click a rep to open their accounts.",
   accounts: "Every account. Assign any account to anyone with the dropdown in the last column — the Overview books update as you go. Filter by a flag, a rep, a segment, or the balancer's suggested moves (accept/reject inline). Click a row for its activity detail.",
   export: "Download the approved changes for your CRM, or the full sheet with every flag and activity count.",
 };
@@ -303,17 +303,54 @@ function flagPills(r) {
     .map((f) => `<span class="flag-pill ${f.cls}">${esc(f.label)}</span>`).join(" ");
 }
 
+/** The one thing this app is asking you to DO: work the balancer's proposed
+ *  moves. A full-width button below the two matrices and above the flag cards —
+ *  the flags are diagnostics you browse, this is a queue you clear. It always
+ *  reads as "go do this" and always lands on Accounts with the queue filtered;
+ *  the on/off toggle lives there, as the primary filter, so this button has no
+ *  state of its own to reflect. */
+function movesCtaHtml() {
+  const n = state.rows.filter((r) => r.proposal_status === "suggested").length;
+  if (!n) {
+    return `<div class="moves-cta empty">No suggested moves right now — the books are
+      balanced under the current settings. Change the segment line or the target book
+      size on the left to re-run the balancer.</div>`;
+  }
+  return `<button class="moves-cta" type="button">
+    <span class="moves-cta-count">${fmt(n)}</span>
+    <span class="moves-cta-text">
+      <strong>Review suggested moves</strong>
+      <span class="moves-cta-sub">Accounts the balancer would hand to a different
+        rep — accept or dismiss each one.</span>
+    </span>
+    <span class="moves-cta-arrow">→</span>
+  </button>`;
+}
+
+function wireMovesCta(root) {
+  const btn = root.querySelector(".moves-cta");
+  if (!btn || btn.tagName !== "BUTTON") return;
+  btn.onclick = () => {
+    state.filters = new Set(["suggested"]);
+    state.repFilter = "";
+    state.segmentFilter = "";
+    state.page = 0;
+    switchTab("accounts");
+  };
+}
+
 /** The Overview is the book-strength matrices per segment (rank + coverage,
  *  coloured by column) followed by the "needs attention" flag cards. */
 function renderOverview() {
   const { ranks, sizes } = segmentRanks();
   const parts = [
     `<p class="eval-diag-sub" id="matrices-note">` +
-    "<strong>Capture</strong> and <strong>Activation</strong> summarise each book — " +
-    "hover their headers for what they mean. The depth cells are the <strong>average " +
-    "rank</strong> of the rep's strongest N accounts (1 = best); shading runs green " +
-    "(strong) → pale (weak) down each whole column. <strong>Click any header to sort</strong> " +
-    "(defaults to Capture / Activation, high first); click a rep to open their accounts.</p>",
+    "Two questions per rep: <strong>Capture</strong> — how much of the segment's best " +
+    "business is in their book? <strong>Activation</strong> — how much of it are they " +
+    "actually working? <strong>Top 25</strong> is the average segment rank of their 25 " +
+    "strongest accounts (1 = the best account in the segment, so lower is better). " +
+    "Greener = stronger, down each column. <strong>Click any header to sort</strong>; " +
+    "click a rep to open their accounts. Hover any ⓘ for the detail.</p>",
   ];
 
   // Tier weighting for the Capture / Activation summary metrics: an account's
@@ -341,12 +378,14 @@ function renderOverview() {
   // Capture: rep's held top-tier value ÷ the segment's total (a share).
   const captureCol = {
     label: "Capture", better: "high", fmt: (v) => `${fmt(v, 0)}%`,
-    help: "Share of the segment's most valuable accounts this rep owns — the top " +
-      "10% by ICP score count double, the top 25% single, the rest zero. High = they " +
-      "hold a lot of the best value; low = they hold little of it.\n\n" +
-      "Balance guide: reps in a segment should have similar Capture — roughly within " +
-      "1.5× of each other. One rep at 3–4× another's share is hoarding the best value; " +
-      "a rep near 0% is under-supplied (or ramping).",
+    help: "How much of the segment's best business sits in this rep's book.\n\n" +
+      "We take the segment's best accounts, add up what they're worth, and show the " +
+      "share this rep owns. An account in the segment's top 10% by score counts double; " +
+      "one in the top 25% counts once; everything below the top 25% doesn't count here. " +
+      "So 20% means this rep holds a fifth of the segment's best business.\n\n" +
+      "What to look for: reps in the same segment should land close together — " +
+      "roughly within 1.5× of each other. One rep at 3–4× another is holding too much " +
+      "of the good stuff; a rep near 0% has been under-supplied (or is ramping).",
     value: (book, grp) => {
       const tot = segTierTotal[grp.key] || 0;
       return tot > 0 ? (100 * heldTierValue(book, grp.key)) / tot : null;
@@ -355,9 +394,15 @@ function renderOverview() {
   // Activation: of the top-tier value the rep holds, the share being worked.
   const activationCol = {
     label: "Activation", better: "high", fmt: (v) => `${fmt(v, 0)}%`,
-    help: "Of the valuable accounts this rep owns (same top-decile-doubled weighting), " +
-      "the share they've actually worked in the activity window. 0% = sitting on strong " +
-      "accounts without touching them. Independent of book size.",
+    help: "Of the best business this rep already owns, how much are they actually " +
+      "working?\n\n" +
+      "Same best-accounts weighting as Capture — we just ask what share of it has had a " +
+      "meeting, call, or outbound email in the activity window. 100% = every good account " +
+      "they own is live; 0% = they're sitting on strong accounts and touching none of " +
+      "them.\n\n" +
+      "This is not about book size — a rep with 30 accounts and a rep with 300 can both " +
+      "be at 100%. Low Activation with high Capture is the expensive combination: the " +
+      "best accounts are parked with someone who isn't working them.",
     value: (book, grp) => {
       const held = heldTierValue(book, grp.key);
       if (held <= 0) return null; // holds no top-tier value — nothing to activate
@@ -415,13 +460,21 @@ function renderOverview() {
       `<h3 class="terr-h3">Book strength <span class="terr-sub">${ctx}</span></h3>`);
     parts.push(renderMatrix(
       groups, (slice) => avgRankOf(slice, ranks), "low", (v) => fmt(v, 0), captureCol,
-      { matrixId: "strength", sort: state.overviewSort.strength }));
+      { matrixId: "strength", sort: state.overviewSort.strength,
+        depthHelp: "The average segment rank of this rep's 25 strongest accounts — " +
+          "1 would mean they own the segment's very best 25. Lower is better. Blank " +
+          "means they hold fewer than 25 accounts in this segment." }));
     parts.push(
       `<h3 class="terr-h3">Coverage <span class="terr-sub">` +
-      `share of each band worked in the last ${windowDays} days</span></h3>`);
+      `share worked in the last ${windowDays} days</span></h3>`);
     parts.push(renderMatrix(
       groups, (slice) => workedPctOf(slice), "high", (v) => `${fmt(v, 0)}%`, activationCol,
-      { matrixId: "coverage", sort: state.overviewSort.coverage }));
+      { matrixId: "coverage", sort: state.overviewSort.coverage, allLabel: "Whole book",
+        depthHelp: `Of this rep's 25 strongest accounts, the share touched in the last ` +
+          `${windowDays} days. Blank means they hold fewer than 25 accounts here.`,
+        allHelp: `Of every account this rep owns in this segment, the share touched in ` +
+          `the last ${windowDays} days. Compare it with Top 25: much lower is fine ` +
+          `(nobody works a whole book); much higher means they're spending time down-market.` }));
   }
   $("#overview-segments").innerHTML = parts.join("");
   $$("#overview-segments .seg-pill").forEach((btn) => {
@@ -443,6 +496,9 @@ function renderOverview() {
       switchTab("accounts");
     };
   });
+
+  $("#overview-moves-cta").innerHTML = movesCtaHtml();
+  wireMovesCta($("#overview-moves-cta"));
 
   $("#highlight-cards").innerHTML = FLAGS.map((f) => {
     const n = state.rows.filter(f.test).length;
@@ -483,8 +539,12 @@ function segmentRanks() {
   return { ranks, sizes };
 }
 
-// Fixed depth cutoffs (columns of the matrix), same for every rep and segment.
-const DEPTH_COLS = [10, 25, 50, 100, 200];
+// Fixed depth cutoff (the one depth column), same for every rep and segment.
+// Deliberately a single band: five nested bands (10/25/50/100/200) asked a
+// reviewer to hold five numbers per rep in their head and read a trend across
+// them. The top 25 is the tier a rep actually works, so one column answers the
+// question the other four only hinted at.
+const DEPTH_COLS = [25];
 
 /** A rep's territory within ONE segment: the accounts they own that belong to
  *  that segment, strongest first. Ranking must stay inside a single segment —
@@ -530,10 +590,18 @@ function workedPctOf(slice) {
  *  the number a cell shows (or null); `better` is which direction is good;
  *  `fmtVal` formats it. Colours are assigned per COLUMN **within each segment**,
  *  so ranks drawn from different segment universes are never shaded against each
- *  other, even though the rows share one table. */
+ *  other, even though the rows share one table.
+ *
+ *  `opts.allLabel` adds a whole-book column under that heading; omit it and the
+ *  table is just the summary metric plus the one depth band. Book strength omits
+ *  it (an average rank over a whole book is dragged around by book size and
+ *  invites exactly the cross-rep comparison it can't support); coverage keeps it,
+ *  because "what share of everything they own is being touched" is a fair
+ *  question with a plain answer. */
 function renderMatrix(groups, valueOf, better, fmtVal, summary, opts) {
   const showSeg = groups.length > 1;
   const sort = opts.sort;
+  const allLabel = opts.allLabel || "";
 
   // Flatten all segments into one sortable list; the Segment column keeps each
   // row's universe legible once sorting interleaves them.
@@ -549,16 +617,27 @@ function renderMatrix(groups, valueOf, better, fmtVal, summary, opts) {
   }
 
   // Column spec: text columns (Rep, Segment, In-seg) plus heat columns (summary,
-  // depth bands, All). `heat` is the vals key + colour source; `dir` its good end.
+  // the depth band, optionally whole-book). `heat` is the vals key + colour
+  // source; `dir` its good end.
   const columns = [
     { label: "Rep", key: "rep", text: true },
     ...(showSeg ? [{ label: "Segment", key: "seg", text: true }] : []),
     { label: "In-seg", key: "inseg" },
     ...(summary ? [{ label: summary.label, key: "summary", heat: "summary",
       dir: summary.better, fmtc: summary.fmt, help: summary.help, cls: "summary-cell" }] : []),
-    ...DEPTH_COLS.map((n) => ({ label: `Top ${n}`, key: String(n), heat: n, dir: better, fmtc: fmtVal })),
-    { label: "All", key: "all", heat: "all", dir: better, fmtc: fmtVal },
+    ...DEPTH_COLS.map((n) => ({ label: `Top ${n}`, key: String(n), heat: n, dir: better,
+      fmtc: fmtVal, help: opts.depthHelp })),
+    ...(allLabel ? [{ label: allLabel, key: "all", heat: "all", dir: better, fmtc: fmtVal,
+      help: opts.allHelp }] : []),
   ];
+
+  // A sort key can outlive its column (saved state, or a column that only exists
+  // on the other matrix) — fall back to the default rather than sorting on a
+  // key nothing renders.
+  if (!columns.some((c) => c.key === sort.key)) {
+    sort.key = summary ? "summary" : "rep";
+    sort.dir = -1;
+  }
 
   // Conditional formatting is over the WHOLE column (all rows, both segments),
   // not per segment.
@@ -693,22 +772,37 @@ function assignCell(r) {
 }
 
 function renderAccounts() {
+  // Two rows. The primary row is the choice this page is actually for — the
+  // whole book, or the balancer's queue. The five flags are diagnostics you
+  // reach for second, so they sit in a quieter row underneath rather than
+  // competing with the queue in one undifferentiated strip of seven chips.
   const suggested = state.rows.filter((r) => r.proposal_status === "suggested").length;
+  const moveOn = state.filters.has("suggested");
   $("#account-filters").innerHTML =
-    `<button class="cat-chip ${state.filters.size ? "" : "active"}" data-flag="">All
+    `<div class="filter-row filter-row-primary">` +
+    `<button class="filter-primary ${state.filters.size ? "" : "active"}" data-flag=""
+       title="Every account in the plan.">All
        <span class="cat-count">${fmt(state.rows.length)}</span></button>` +
+    `<button class="filter-primary filter-primary-move ${moveOn ? "active" : ""}
+       ${suggested ? "" : "empty"}" data-flag="suggested"
+       title="${suggested
+      ? "Accounts the balancer would hand to a different rep — accept or dismiss each one in the last column."
+      : "Nothing to review: the books are balanced under the current settings."}">
+       ✨ Suggested moves
+       <span class="cat-count">${fmt(suggested)}</span></button>` +
+    `</div>` +
+    `<div class="filter-row filter-row-secondary">` +
+    `<span class="filter-label">Also</span>` +
     FLAGS.map((f) => {
       const n = state.rows.filter(f.test).length;
       return `<button class="cat-chip ${state.filters.has(f.key) ? "active" : ""}"
         data-flag="${f.key}" title="${esc(f.help)}">${esc(f.label)}
         <span class="cat-count">${fmt(n)}</span></button>`;
     }).join("") +
-    `<button class="cat-chip cat-chip-move ${state.filters.has("suggested") ? "active" : ""}"
-       data-flag="suggested"
-       title="Accounts the balancer has proposed a new owner for — accept or reject them in the last column.">Suggested move
-       <span class="cat-count">${fmt(suggested)}</span></button>`;
-  $$("#account-filters .cat-chip").forEach((el) => {
+    `</div>`;
+  $$("#account-filters [data-flag]").forEach((el) => {
     el.onclick = () => {
+      if (el.classList.contains("empty")) return;  // nothing behind it to show
       const key = el.dataset.flag;
       if (!key) state.filters = new Set();
       else if (state.filters.has(key)) state.filters.delete(key);
