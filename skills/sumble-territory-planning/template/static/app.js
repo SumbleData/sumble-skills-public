@@ -39,17 +39,21 @@ const state = {
 };
 
 const PAGE_DESCRIPTIONS = {
-  overview: "How much of the segment's best business each rep holds (Capture), and how much of it they're working (Activation) — plus what needs attention. Click a rep to open their accounts.",
+  overview: "How much of the segment's best business each rep holds (Capture) — plus what needs attention. Click a rep to open their accounts. With activity loaded, a second table adds how much of it they're actually working (Activation).",
   accounts: "Every account. Assign any account to anyone with the dropdown in the last column — the Overview books update as you go. Filter by a flag, a rep, a segment, or the balancer's suggested moves (accept/reject inline). Click a row for its activity detail.",
   export: "Download the approved changes for your CRM, or the full sheet with every flag and activity count.",
 };
 
 // Flags read the EFFECTIVE owner (current + your allocations), so they update
 // the moment you assign an account on the Accounts tab.
+// `needsActivity: true` hides the flag entirely when no activity is loaded.
+// With zero events every owned account trivially satisfies "not worked", so
+// these cards would report the whole book as neglected when the truth is that
+// the question is unanswerable. See hasActivityData().
 const FLAGS = [
-  { key: "not_worked",       label: "Not being worked",  test: (r) => effectiveOwner(r) && !num(r.worked), cls: "flag-warn",
+  { key: "not_worked",       label: "Not being worked",  test: (r) => effectiveOwner(r) && !num(r.worked), cls: "flag-warn", needsActivity: true,
     help: "Owned, but the owner has had no meeting, call, or outbound email with them in the window." },
-  { key: "strong_idle",      label: "Strong but idle",   test: (r) => isStrong(r) && effectiveOwner(r) && !num(r.worked), cls: "flag-bad",
+  { key: "strong_idle",      label: "Strong but idle",   test: (r) => isStrong(r) && effectiveOwner(r) && !num(r.worked), cls: "flag-bad", needsActivity: true,
     help: "Among the strongest accounts by ICP score (see the cutoff on the left), owned, and nobody is working it. The most expensive kind of neglect." },
   { key: "strong_unallocated", label: "Strong but unallocated", test: (r) => isStrong(r) && !effectiveOwner(r) && !isWhitespace(r), cls: "flag-bad",
     help: "Among the strongest accounts by ICP score (see the cutoff on the left), and no active rep owns it. Allocating it clears this flag." },
@@ -72,6 +76,24 @@ const REASON_LABELS = {
 function num(v) { const n = Number(v); return Number.isFinite(n) ? n : 0; }
 function isWhitespace(r) {
   return r.account_category === "whitespace" || r.account_category === "whitespace_subsidiary";
+}
+
+/** True when ANY row carries a real activity event.
+ *
+ *  Mirrors territory_lib.has_activity() so the UI and the move engine agree.
+ *  When false, every activity-derived surface is REMOVED rather than shown as
+ *  zero: the Coverage matrix, the Activation column, the not-worked and
+ *  strong-idle flags, and the whole suggested-moves queue. Zero events means
+ *  "we cannot tell", and a 0% coverage table states the opposite.
+ *  Memoised — it is read on every render and scans every row. */
+let _hasActivity = null;
+function hasActivityData() {
+  if (_hasActivity === null) {
+    _hasActivity = state.rows.some(
+      (r) => num(r.meetings) + num(r.calls) + num(r.emails_out) + num(r.emails_in) > 0
+    );
+  }
+  return _hasActivity;
 }
 
 /** Rank all real (non-whitespace) accounts by ICP score, 1 = best, and mark the
@@ -298,8 +320,14 @@ async function applyCalibration() {
 
 // ---------------------------------------------------------------- rendering
 
+/** The flags worth showing: activity-derived ones drop out when no activity is
+ *  loaded, so they can't report an unanswerable question as a finding. */
+function activeFlags() {
+  return hasActivityData() ? FLAGS : FLAGS.filter((f) => !f.needsActivity);
+}
+
 function flagPills(r) {
-  return FLAGS.filter((f) => f.test(r))
+  return activeFlags().filter((f) => f.test(r))
     .map((f) => `<span class="flag-pill ${f.cls}">${esc(f.label)}</span>`).join(" ");
 }
 
@@ -310,6 +338,16 @@ function flagPills(r) {
  *  the on/off toggle lives there, as the primary filter, so this button has no
  *  state of its own to reflect. */
 function movesCtaHtml() {
+  // No activity => the mover deliberately proposes nothing (see
+  // territory_lib.suggest_moves). Explain that rather than showing the usual
+  // "books are balanced" empty state, which would be a flat lie.
+  if (!hasActivityData()) {
+    return `<div class="moves-cta empty">Move suggestions are off because no activity
+      data is loaded. The balancer never moves an account a rep is actively working —
+      with no meetings, calls or emails to check, that protection can't apply, so
+      proposing moves could hand away a live deal. Load activity sources and re-run
+      to turn suggestions on.</div>`;
+  }
   const n = state.rows.filter((r) => r.proposal_status === "suggested").length;
   if (!n) {
     return `<div class="moves-cta empty">No suggested moves right now — the books are
@@ -464,17 +502,29 @@ function renderOverview() {
         depthHelp: "The average segment rank of this rep's 25 strongest accounts — " +
           "1 would mean they own the segment's very best 25. Lower is better. Blank " +
           "means they hold fewer than 25 accounts in this segment." }));
-    parts.push(
-      `<h3 class="terr-h3">Coverage <span class="terr-sub">` +
-      `share worked in the last ${windowDays} days</span></h3>`);
-    parts.push(renderMatrix(
-      groups, (slice) => workedPctOf(slice), "high", (v) => `${fmt(v, 0)}%`, activationCol,
-      { matrixId: "coverage", sort: state.overviewSort.coverage, allLabel: "Whole book",
-        depthHelp: `Of this rep's 25 strongest accounts, the share touched in the last ` +
-          `${windowDays} days. Blank means they hold fewer than 25 accounts here.`,
-        allHelp: `Of every account this rep owns in this segment, the share touched in ` +
-          `the last ${windowDays} days. Compare it with Top 25: much lower is fine ` +
-          `(nobody works a whole book); much higher means they're spending time down-market.` }));
+
+    // Coverage is ENTIRELY activity-derived. With no events loaded it would
+    // render every rep at 0% — indistinguishable from a team working nothing —
+    // so drop the table and say why instead.
+    if (hasActivityData()) {
+      parts.push(
+        `<h3 class="terr-h3">Coverage <span class="terr-sub">` +
+        `share worked in the last ${windowDays} days</span></h3>`);
+      parts.push(renderMatrix(
+        groups, (slice) => workedPctOf(slice), "high", (v) => `${fmt(v, 0)}%`, activationCol,
+        { matrixId: "coverage", sort: state.overviewSort.coverage, allLabel: "Whole book",
+          depthHelp: `Of this rep's 25 strongest accounts, the share touched in the last ` +
+            `${windowDays} days. Blank means they hold fewer than 25 accounts here.`,
+          allHelp: `Of every account this rep owns in this segment, the share touched in ` +
+            `the last ${windowDays} days. Compare it with Top 25: much lower is fine ` +
+            `(nobody works a whole book); much higher means they're spending time down-market.` }));
+    } else {
+      parts.push(
+        `<div class="terr-note">No activity data loaded, so coverage cannot be ` +
+        `measured — the Coverage table, the Activation column and the ` +
+        `worked-based flags are hidden rather than shown as zero. Book strength ` +
+        `below is unaffected: it comes from ICP score and ownership only.</div>`);
+    }
   }
   $("#overview-segments").innerHTML = parts.join("");
   $$("#overview-segments .seg-pill").forEach((btn) => {
@@ -500,7 +550,7 @@ function renderOverview() {
   $("#overview-moves-cta").innerHTML = movesCtaHtml();
   wireMovesCta($("#overview-moves-cta"));
 
-  $("#highlight-cards").innerHTML = FLAGS.map((f) => {
+  $("#highlight-cards").innerHTML = activeFlags().map((f) => {
     const n = state.rows.filter(f.test).length;
     return `<button class="highlight-card ${n ? "" : "empty"}" data-flag="${f.key}" title="${esc(f.help)}">
       <span class="hc-count">${fmt(n)}</span>
@@ -793,7 +843,7 @@ function renderAccounts() {
     `</div>` +
     `<div class="filter-row filter-row-secondary">` +
     `<span class="filter-label">Also</span>` +
-    FLAGS.map((f) => {
+    activeFlags().map((f) => {
       const n = state.rows.filter(f.test).length;
       return `<button class="cat-chip ${state.filters.has(f.key) ? "active" : ""}"
         data-flag="${f.key}" title="${esc(f.help)}">${esc(f.label)}

@@ -70,9 +70,28 @@ does not replace it.
 
 - **Activity sources (optional but the point of the skill)** — Google Calendar,
   Gong, Fireflies, Granola, Salesforce email, Gmail. Whichever MCPs are
-  connected. Without any of them the app still shows balance and segment fit,
-  but every account reads "not worked" and the move suggestions become
-  size-only. Say so plainly rather than letting the user think coverage is zero.
+  connected.
+
+  **With no activity loaded, everything activity-derived is SUPPRESSED, not
+  shown as zero.** Zero events does not mean zero coverage; it means the
+  question is unanswerable, and a table of 0% states the opposite. One helper,
+  `territory_lib.has_activity()` (mirrored by `hasActivityData()` in the UI), is
+  the single source of truth. When it is false:
+  - the **Coverage matrix** and the **Activation** column are removed, replaced
+    by a short note saying why (Book strength is unaffected — it reads ICP score
+    and ownership only);
+  - the **not-worked** and **strong-but-idle** flags are removed — with no
+    events every owned account trivially satisfies "not worked", so the cards
+    would indict the entire book;
+  - **move suggestions are switched off entirely.** This is the important one.
+    The rule that protects an account a rep is actively working is enforced by
+    reading `worked`; with no events that rail is silently inert and every
+    account looks fair game, so the mover would happily reassign live deals.
+    `suggest_moves` no-ops and reports `skipped_no_activity`.
+
+  The plan still does real work without activity — book balance, segment misfit,
+  double-allocation, and the unallocated pile are all ownership-structure
+  questions. Say plainly which half you are delivering.
 
 - **Sumble MCP** — only for `lookup.py`-adjacent name resolution and, on Path B,
   nothing at all. If it isn't available, install: https://docs.sumble.com/api/mcp.

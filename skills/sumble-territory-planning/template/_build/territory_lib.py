@@ -665,6 +665,25 @@ def _propose(row: dict[str, Any], new_owner: str, reason: str) -> None:
     row["proposal_status"] = "suggested"
 
 
+def has_activity(rows: list[dict[str, Any]]) -> bool:
+    """True when ANY row carries a real activity event.
+
+    The single source of truth for "is activity loaded", shared by the CLI, the
+    app's move engine, and the UI — so all three agree on whether coverage means
+    anything. Zero events is NOT the same as zero coverage: it means the
+    question is unanswerable, and everything that reads `worked` has to be
+    suppressed rather than displayed as 0%.
+    """
+    return any(
+        to_float(r.get("meetings"))
+        + to_float(r.get("calls"))
+        + to_float(r.get("emails_out"))
+        + to_float(r.get("emails_in"))
+        > 0
+        for r in rows
+    )
+
+
 def suggest_moves(
     plan: dict[str, Any], rows: list[dict[str, Any]], reset: bool = False
 ) -> dict[str, Any]:
@@ -677,6 +696,13 @@ def suggest_moves(
     rebalance — because moving an account someone already has a relationship
     with costs more than assigning one nobody owns. The hard constraint
     everywhere: an account with activity is NEVER proposed for a move.
+
+    NO ACTIVITY LOADED => NO MOVES. That constraint is the only thing stopping
+    the mover from reassigning an account a rep is mid-deal on, and it is
+    enforced by reading `worked`. With no activity events every row reads
+    not-worked, so the rail is silently inert and every account looks fair game.
+    Proposing moves in that state is worse than proposing none, so the whole
+    engine no-ops and reports why.
 
     Decisions the user already made (accepted / rejected / manual) survive
     unless `reset`, so re-running after a review session refines the plan
@@ -702,6 +728,32 @@ def suggest_moves(
             row["proposed_owner"] = ""
             row["proposal_reason"] = ""
             row["proposal_status"] = ""
+
+    # See the docstring: without activity the "never move a worked account" rail
+    # cannot fire, so no automated proposal is trustworthy. Clear the pipeline's
+    # own suggestions (done just above) and stop. The user's accepted / manual /
+    # rejected decisions are untouched.
+    if not has_activity(rows):
+        zero_counts = {
+            "misfit": 0,
+            "assign_unallocated": 0,
+            "assign_whitespace": 0,
+            "rebalance": 0,
+        }
+        return {
+            "skipped_no_activity": True,
+            "counts": zero_counts,
+            "total": 0,
+            "cv_before": {s["key"]: 0.0 for s in segments},
+            "after_stats": book_stats(rows, all_reps, balance_cats),
+            "skipped_worked_misfits": 0,
+            "skipped_coach_misfits": 0,
+            "coach_names": sorted(coach_names),
+            "unrouted": {},
+            "frozen": sum(
+                1 for r in rows if str(r.get("proposal_status") or "") in FROZEN_STATUSES
+            ),
+        }
 
     reps_by_segment: dict[str, list[dict[str, Any]]] = {}
     for r in reps:

@@ -65,6 +65,21 @@ def main() -> None:
 
     counts = report["counts"]
     segments = plan["segments"]
+
+    # No activity loaded => the mover deliberately proposes nothing. Say so
+    # loudly: a silent "0 proposals" reads as "the books are already balanced",
+    # which is the opposite of what happened.
+    if report.get("skipped_no_activity"):
+        print(f"[moves] wrote {csv_path} · 0 proposals")
+        print(
+            "[moves] SKIPPED: no activity data is loaded, so every account reads "
+            "'not worked' and the rule that protects an account a rep is actively "
+            "working cannot fire. Proposing moves blind would risk reassigning live "
+            "deals, so nothing was proposed. Load activity sources (calendar, call "
+            "recorder, CRM email) and re-run to get move suggestions."
+        )
+        return
+
     print(f"[moves] wrote {csv_path} · {report['total']:,} proposals")
     print(
         f"[moves] misfit {counts['misfit']:,} · unallocated {counts['assign_unallocated']:,} · "
