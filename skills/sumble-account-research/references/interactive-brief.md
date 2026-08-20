@@ -9,8 +9,16 @@ signal → one card → one play. **Hold every line to `references/writing-rules
 
 **Sumble-branded by design** — an internal research artifact ("Sumble Intelligence"), not
 prospect-facing, so it skips `references/branding.md`. The template already carries the
-brand: one emerald accent (`#16a34a`) on slate/white, the hosted Sumble mark, Inter.
+brand: one emerald accent (`#16a34a`) on slate/white, the official Sumble mark, Inter.
 Don't recolor it to the prospect or the seller.
+
+**The logo is base64-embedded — keep it that way.** The template carries the bundled
+`assets/sumble-eyes-logo-512.png` inline as a data URI in both the nav and the footer, so a
+delivered brief renders on a plane and still renders after someone forwards it. Never swap it
+for a hotlinked URL, never redraw it in SVG/CSS, and never point it at a different mark.
+**Before you ship, grep the finished file for `src="http`** — it must return nothing. The one
+external request the template makes by design is the Google Fonts `<link>` for Inter and
+JetBrains Mono; those degrade to system fonts offline, whereas a hotlinked logo just breaks.
 
 **Brand-font upgrade (Sumble-internal runs only).** The public template ships **Inter**
 because the NEXT brand faces (NextPoster/NextBook) are proprietary and this repo is public —
