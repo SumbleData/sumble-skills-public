@@ -31,6 +31,7 @@ and how you trigger it differ.
 | [`sumble-account-scoring`](skills/sumble-account-scoring) | Score **your own accounts** *and* find **net-new whitespace** — one skill, pick the objective. Interviews you about your ICP, calibrates weights against your closed-won customers, builds a tunable scoring app + portable scorer, and in whitespace mode ranks Sumble's universe by your ICP minus the accounts you already own (subsidiaries of existing accounts flagged land-and-expand). | [Part 1 — the method](skills/sumble-account-scoring/articles/01-account-score-should-tell-a-rep-what-to-do.md) · [Part 2 — build it](skills/sumble-account-scoring/articles/02-build-an-account-score-you-can-prospect-from.md) |
 | [`sumble-crm-cleaning`](skills/sumble-crm-cleaning) | Clean **your CRM** against Sumble's org graph. Matches every account to a Sumble organization, surfaces duplicate accounts (same org, two records) and missing or conflicting parent/subsidiary links, and builds a review app where you accept/reject each finding and export the change list. | [The article](skills/sumble-crm-cleaning/articles/01-clean-your-crm-against-the-org-graph.md) |
 | [`sumble-people-scoring`](skills/sumble-people-scoring) 🚧 | Score **people / leads** — both the contacts already in your CRM and the people you've never met at your target accounts. One ranked list per account drives outbound, lead routing, lead prioritization, and campaign audiences; emits a production scorer for an enriched CRM. | [The method & use cases](skills/sumble-people-scoring/articles/01-people-scoring-use-cases.md) |
+| [`sumble-direct-mail-audience`](skills/sumble-direct-mail-audience) | Build a **direct-mail audience near company offices** in a local Marimo app. Resolves companies and people with Sumble, researches additional offices with Parallel, verifies and geocodes addresses, filters by persona, seniority, and radius, and exports office and audience CSVs. | [Setup](skills/sumble-direct-mail-audience) |
 | [`sumble-territory-planning`](skills/sumble-territory-planning) | Plan and rebalance **territories**. Companion to account scoring: takes your account strength, your CRM ownership, and per-rep×account activity (calendar, call recorders, CRM email) and shows how evenly the books are split, which accounts nobody is working, which sit in the wrong segment, which are unallocated or owned twice — then proposes owner changes you accept or reject and export as an `actions.csv`. | [The article](skills/sumble-territory-planning/articles/01-balance-territories-on-value-not-account-counts.md) |
 
 A common workflow: tune a model on your accounts with **sumble-account-scoring**,
@@ -66,8 +67,10 @@ flags are fictitious, opportunity counts removed).
 
 - One of: **Claude Code**, **OpenAI Codex CLI**, or **Cursor**.
 - A **Sumble account with API access** — sign up at [sumble.com](https://sumble.com), then grab your key at [sumble.com/account](https://sumble.com/account).
-- The **Sumble MCP server** connected in your agent — [docs.sumble.com/api/mcp](https://docs.sumble.com/api/mcp).
+- The **Sumble MCP server** for skills that call it — [docs.sumble.com/api/mcp](https://docs.sumble.com/api/mcp). The direct-mail skill calls the public API directly and does not require MCP.
+- A **Parallel API key** for the direct-mail skill.
 - **Python 3.10+** to run the generated app (the app itself needs nothing else — no `pip install`).
+- The direct-mail skill uses [uv](https://docs.astral.sh/uv/) to create an isolated Python 3.13 environment and install its locked Marimo dependencies.
 
 ## Install
 
@@ -80,6 +83,7 @@ agents and installs into the agent you choose.
 npx skills add SumbleData/sumble-skills-public --skill sumble-mcp
 npx skills add SumbleData/sumble-skills-public --skill sumble-account-scoring
 npx skills add SumbleData/sumble-skills-public --skill sumble-people-scoring
+npx skills add SumbleData/sumble-skills-public --skill sumble-direct-mail-audience
 npx skills add SumbleData/sumble-skills-public --skill sumble-territory-planning
 ```
 
@@ -109,7 +113,8 @@ npx skills add https://github.com/SumbleData/sumble-skills-public/tree/main/skil
 
 Start a new agent session after installing. In Codex, ask it to *"use the
 sumble-account-scoring skill"* or *"use the sumble-mcp skill."* In Claude Code,
-run `/sumble-account-scoring`, `/sumble-people-scoring`, or `/sumble-mcp`.
+run `/sumble-account-scoring`, `/sumble-people-scoring`,
+`/sumble-direct-mail-audience`, or `/sumble-mcp`.
 
 > Connect the Sumble MCP once per tool — see [docs.sumble.com/api/mcp](https://docs.sumble.com/api/mcp).
 > Each skill's own `README.md` has a step-by-step, no-experience-needed walkthrough.
@@ -137,6 +142,10 @@ python app.py        # open http://localhost:8001 — drag sliders, rankings upd
 To score a much larger list once weights are tuned, hand the generated
 `*-weights.json` to the included portable scorer (`score_accounts.py` /
 `score_leads.py`) — it runs anywhere with Python and a Sumble API key.
+
+The direct-mail skill follows a narrower setup flow. It copies a committed Marimo app, helps you
+save the Sumble and Parallel keys to `.env`, installs the locked environment with `uv`, and returns
+the local notebook URL. Campaign inputs and CSV downloads stay inside Marimo.
 
 ## Learn the method
 

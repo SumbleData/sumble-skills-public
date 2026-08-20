@@ -1,0 +1,35 @@
+[project]
+name = "direct-mail-audience-builder"
+version = "0.1.0"
+description = "Build a direct-mail audience near company offices with Sumble and Parallel."
+readme = "README.md"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "geopy==2.4.1",
+    "httpx==0.28.1",
+    "marimo==0.23.16",
+    "pandas==2.3.3",
+    "parallel-web==1.3.0",
+    "pydantic==2.12.5",
+    "python-dotenv==1.2.1",
+]
+
+[dependency-groups]
+dev = [
+    "pytest==9.1.1",
+    "ruff==0.15.4",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff.lint.per-file-ignores]
+"app.py" = ["B018"]

@@ -1,0 +1,12 @@
+.DS_Store
+.env
+.env.local
+.venv/
+.cache/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.marimo/
+__marimo__/
+outputs/
