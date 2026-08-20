@@ -1710,6 +1710,66 @@ function downloadFilteredCsv() {
   URL.revokeObjectURL(a.href);
 }
 
+// Download the rows currently shown, shaped for a CRM import: one identity
+// block the CRM can match on, then the Sumble columns to write. Both Salesforce
+// (Data Loader / Data Import Wizard) and HubSpot ask you to map columns on
+// import, so plain header names are fine — no need to guess __c API names.
+// crm_account_id is the Salesforce Account Id / HubSpot Record ID and is blank
+// for whitespace rows, which import as NEW accounts matched on domain.
+function downloadCrmCsv() {
+  const ranked = sortedFilteredRanked();
+  if (!ranked.length) return;
+  const base = state.config.sumble_url_base || "https://sumble.com/orgs/";
+  const slugCol = state.config.slug_column;
+  // Build rows first: whether the record-id column is worth emitting depends on
+  // whether ANY row has one.
+  const recs = ranked.map(({ row, score, rank }) => {
+    const domain = row.crm_url || row.url || "";
+    // Only a real record id earns the column. Some source lists fill
+    // crm_account_id with the domain (no CRM extract behind them); that is not
+    // an id, and shipping it invites an upsert keyed on a column Salesforce
+    // won't match. Domain is in its own column either way — no data is lost.
+    const raw = String(row.crm_account_id ?? "").trim();
+    const id = raw.toLowerCase() === domain.trim().toLowerCase() ? "" : raw;
+    return {
+      id,
+      values: [
+        row.crm_account_name || row[state.config.name_column] || "",
+        domain,
+        rowCategory(row),
+        rank,
+        score.toFixed(2),
+        row.sumble_url || (slugCol && row[slugCol] ? base + row[slugCol] : ""),
+      ],
+    };
+  });
+
+  // Salesforce needs the id: the Data Import Wizard can only match Accounts on
+  // Account ID when updating (Name+Site is insert-only), and Data Loader's
+  // upsert requires an id column. HubSpot doesn't — it auto-dedupes companies
+  // on domain, and Record ID is optional there. So carry the id when we have
+  // one, and drop the column entirely rather than ship it empty.
+  const hasIds = recs.some((r) => r.id);
+  const cols = [
+    ...(hasIds ? ["crm_account_id"] : []),
+    "account_name", "domain", "account_category",
+    "sumble_rank", "sumble_score", "sumble_url",
+  ];
+  const lines = [cols.map(csvCell).join(",")];
+  for (const r of recs) {
+    lines.push([...(hasIds ? [r.id] : []), ...r.values].map(csvCell).join(","));
+  }
+
+  const customer = (state.config.customer_name || "accounts")
+    .toLowerCase().replace(/[^a-z0-9]+/g, "_");
+  const blob = new Blob([lines.join("\n") + "\n"], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `${customer}_crm_import_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
 // ---------- Render: per-row breakdown ----------
 
 function findRow(id) {
@@ -2615,6 +2675,8 @@ async function init() {
   // Download exactly the rows currently shown (filters + sort applied).
   const dlFiltered = document.getElementById("download-filtered");
   if (dlFiltered) dlFiltered.addEventListener("click", downloadFilteredCsv);
+  const dlCrm = document.getElementById("download-crm");
+  if (dlCrm) dlCrm.addEventListener("click", downloadCrmCsv);
   document.getElementById("page-prev").addEventListener("click", () => {
     if (state.page > 0) {
       state.page--;

@@ -170,6 +170,32 @@ account_scoring/{company}/
   current sliders, and the per-account breakdown panel shows the same story:
   signal contributions → base score → each boost/penalty line → final score.
 
+**CRM import export.** The table toolbar's **Download CRM import** button
+writes the rows *currently shown* (category chips + search + size filter + sort
+applied) as a narrow, mapping-friendly file:
+`crm_account_id, account_name, domain, account_category, sumble_rank,
+sumble_score, sumble_url` — the id column is **omitted entirely** when no row
+carries a real one, so the file never ships a dead column. The id matters for
+**Salesforce only**: the Data Import Wizard can match Accounts on Account ID
+when updating (Name + Site is insert-only), and Data Loader's upsert requires an
+id column. HubSpot needs nothing but `domain` — it auto-dedupes companies on
+domain name, and Record ID is optional there (a blank one just creates a new
+company). Salesforce (Data Loader / Data Import Wizard) and
+HubSpot both have a column-mapping step on import, so the headers are plain
+names — don't try to guess `__c` API names. `crm_account_id` is the Salesforce
+Account Id / HubSpot Record ID carried through **verbatim** from
+`_raw/sample.csv`, so an **update/upsert** matches by id; whitespace rows have
+it blank and import as **new** accounts matched on `domain`. Nothing in the
+pipeline invents an id — if `_raw/sample.csv` had no real CRM extract behind it,
+whatever is in that column is what you get, which is why the export blanks the
+id when it merely repeats the domain (see `examples/account-scoring`, where all
+1,945 CRM rows carry the domain as the "id"). **When the objective includes
+writing scores back to the CRM, ask for the real record id** in the Stage-1
+interview — pull `Id` from Salesforce or `Record ID` from HubSpot alongside name
+and domain. This is why `crm_account_id`,
+`crm_account_name` and `crm_url` are in the app.py passthrough list even though
+they're not shown in the table.
+
 **Two score-sheet non-negotiables (NEVER strip these — the template enforces
 both with fallbacks):**
 1. **Deep links, always.** Every Sumble count/growth signal carries a

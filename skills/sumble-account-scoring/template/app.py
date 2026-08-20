@@ -358,6 +358,12 @@ def load_state() -> dict[str, Any]:
         "ws_fit",
         "ws_fit_reason",
         "ws_filter_provider",
+        # CRM identity — not shown in the table, but needed by the in-app
+        # "Download CRM import" export so the file can be upserted straight
+        # into Salesforce / HubSpot.
+        "crm_account_id",
+        "crm_account_name",
+        "crm_url",
         *table_cols,
         *[m["column"] for m in multipliers],
     ]:
