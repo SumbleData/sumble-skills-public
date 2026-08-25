@@ -96,9 +96,13 @@ One quoted sentence per play, in the seller's voice, and it **names the product*
   index, and that's what our tiered storage is for" works. "Have you considered our tiered
   storage?" does not. Same content, different order, completely different call.
 - **Name the specific module, not the company.** Add a reference customer with a concrete
-  outcome as a trailing `.proof` span only when you actually have one. `GetMyCompanyProfile`
-  does not reliably return reference customers, so if the profile has none, drop the span
-  rather than inventing an outcome.
+  outcome as a trailing `.proof` span only when you actually have one. Take it from whatever
+  the seller uploaded at Step 1c first, because `GetMyCompanyProfile` does not reliably return
+  reference customers or outreach examples. If neither has one, drop the span rather than
+  inventing an outcome.
+- **Use their words.** Where the seller uploaded plays, battlecards or emails that worked, the
+  play names, the product naming and the sentence rhythm all come from those, not from your
+  own phrasing or from the profile's summary.
 - **The product must match the card's play badge**, or the badge is decoration.
 - **Never Sumble vocabulary.** No "used/mentioned", no "N postings", no "Sumble sees", no
   raw counts. The prospect has never heard of Sumble. Counts live in the evidence box and

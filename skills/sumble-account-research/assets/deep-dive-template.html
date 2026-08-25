@@ -338,8 +338,9 @@ section{margin-top:52px}
 
   <section>
     <h2 class="sec-h">The plays</h2>
-    <p class="sec-sub">One card per play. Filter pills are the seller's own named plays from the
-       Step 1 profile; drop them and keep "All plays" if the profile has none.</p>
+    <p class="sec-sub">One card per play. Filter pills are the seller's own play names, taken
+       verbatim from whatever they uploaded at Step 1c and falling back to the Step 1 profile;
+       drop them and keep "All plays" if there are no distinct named plays.</p>
     <div class="filters">
       <button class="filter-btn active" data-filter="all" onclick="setFilter('all',this)">All plays</button>
       <button class="filter-btn" data-filter="{{PLAY_SLUG}}" onclick="setFilter('{{PLAY_SLUG}}',this)">{{Play name}}</button>
