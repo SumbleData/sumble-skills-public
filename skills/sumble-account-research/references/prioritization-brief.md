@@ -21,9 +21,8 @@ and white, the Sumble mark, Inter with JetBrains Mono for data. Skip
 | Stat tiles | 3-4 numbers describing the board as a whole |
 | Funnel | TAM to SAM to ICP, so "top 20" has a denominator |
 | Why this list is different | The one thing their CRM could not have told them |
-| Ranked board | One row per account, each with a reason |
+| Ranked board | One row per account, each with a reason; the top 3-5 expand in place |
 | Scoring model | The weights, published |
-| Account cards | The top 3-5 expanded |
 | Traps & dead zone | What not to work, and why |
 | Limits & method | The exact query, and anything truncated |
 
@@ -109,16 +108,34 @@ The research pass behind this format should stay cheap until accounts survive th
 
 Costs and the query language live in `references/mcp-tools.md`.
 
-## Account cards
+## The card opens on the row
 
-Expand the top three to five. Each is a compressed version of the deep dive: the evidence
-with links, one angle in the rep's voice that names the product, one discovery question, and
-one to three people with the entry point marked and both links on every name. The same call
-line rules apply as in `references/deep-dive-brief.md`, including the ban on Sumble
-vocabulary in anything the rep says out loud.
+Give the top three to five a `card` object and their board row becomes expandable in place.
+Every other row stays a plain row.
 
-Everything below the cards stays a row until someone asks for more. Offer to build a full
-deep dive on any of them at the close.
+**Do not put the cards in a section of their own.** A rep reads the ranking top to bottom,
+stops at a name they recognise, and wants the detail *there*. A separate section makes them
+scroll away from the board, find the account again, then scroll back to carry on, and the
+ranking is the thing they came for. Keeping the detail on the row also means the filter pills
+hide a card along with its account, which a separate section cannot do.
+
+Each card is a compressed deep dive: the evidence with links, one angle in the rep's voice
+that names the product, one discovery question, and one to three people with the entry point
+marked and both links on every name. The same call-line rules apply as in
+`references/deep-dive-brief.md`, including the ban on Sumble vocabulary in anything the rep
+says out loud.
+
+Three mechanics, all handled by the template but easy to break:
+
+- The detail row is a `<tr class="drow">` with a `colspan` cell, rendered immediately after
+  the row that owns it. `toggleRow` walks to `nextElementSibling`, so the pairing is
+  positional and needs no ids.
+- `COLS` in the script must match the `<thead>` column count. Add a column to the table and
+  the detail cell stops spanning the full width.
+- The account name calls `event.stopPropagation()`, so clicking the name still navigates to
+  Sumble while a click anywhere else on the row expands it.
+
+Offer to build a full deep dive on any of them at the close.
 
 ## Deliver
 

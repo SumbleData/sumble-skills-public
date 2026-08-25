@@ -11,8 +11,12 @@
   references/writing-rules.md.
 
   Section spine (keep this order):
-    Funnel -> Ranked board -> Scoring model -> Account cards -> Traps & dead zone
-    -> Limits & method
+    Funnel -> Ranked board -> Scoring model -> Traps & dead zone -> Limits & method
+
+  The detail for a top account expands INLINE on its own board row. There is no
+  separate "account cards" section: a rep reads the ranking, stops at a name, and
+  opens it where they are, instead of scrolling to find it again somewhere else.
+  Give the top 3-5 a `card` object; leave it off every other row.
 
   Two rules that make this format work and are easy to skip:
     1. The ranking basis goes in the SUBTITLE, never buried. A rep must be able to
@@ -122,19 +126,19 @@ table.board{width:100%;border-collapse:collapse;background:#fff;font-size:13px}
 .factor-w{font-family:var(--font-mono);font-size:11px;color:var(--green-700);font-variant-numeric:tabular-nums}
 .factor-d{font-size:12px;color:var(--slate-600)}
 
-/* account cards: the top few, expanded */
-.acards{display:flex;flex-direction:column;gap:9px}
-.acard{border:1px solid var(--slate-200);border-radius:11px;overflow:hidden}
-.acard-h{display:flex;align-items:center;gap:13px;padding:14px 18px;cursor:pointer;user-select:none}
-.acard-h:hover,.acard-h.open{background:var(--slate-50)}
-.acard-r{font-family:var(--font-mono);font-size:17px;font-weight:500;color:var(--green-700);min-width:28px}
-.acard-i{flex:1;min-width:0}
-.acard-t{font-family:var(--font-display);font-size:14px;font-weight:600;line-height:1.3}
-.acard-s{font-family:var(--font-mono);font-size:11px;color:var(--slate-400);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.acard-c{font-family:var(--font-mono);font-size:10px;color:var(--slate-400);transition:transform .2s}
-.acard-h.open .acard-c{transform:rotate(180deg)}
-.acard-b{display:none;border-top:1px solid var(--slate-100);padding:17px 18px 18px 59px}
-.acard-b.open{display:block}
+/* Expandable board rows. The detail for a top account lives ON its row, not in a
+   second section: a rep reads the ranking, stops at a name, and opens it in place. */
+.board tbody tr.brow.exp{cursor:pointer}
+.board tbody tr.brow.exp:hover{background:var(--slate-50)}
+.board tbody tr.brow.open{background:var(--slate-50)}
+.board tbody tr.brow.open > td{border-bottom-color:transparent}
+.chev{font-family:var(--font-mono);font-size:9px;color:var(--slate-400);display:inline-block;margin-left:7px;transition:transform .2s}
+.brow.open .chev{transform:rotate(180deg)}
+.expandable{font-family:var(--font-mono);font-size:9px;letter-spacing:.05em;text-transform:uppercase;color:var(--green-700);display:block;margin-top:3px}
+.drow{display:none}
+.drow.open{display:table-row}
+.drow > td{padding:0;background:var(--slate-50);border-bottom:1px solid var(--slate-200)}
+.dcard{padding:4px 22px 20px 22px}
 .evid{background:var(--slate-50);border:1px solid var(--slate-200);border-left:3px solid var(--green-600);border-radius:8px;padding:13px 15px;margin-bottom:13px}
 .evid-l{font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--green-700);margin-bottom:6px}
 .evid-t{font-size:13px;color:var(--slate-800)}
@@ -238,7 +242,7 @@ table.board{width:100%;border-collapse:collapse;background:#fff;font-size:13px}
   <section>
     <h2 class="sec-h">Ranked board</h2>
     <p class="sec-sub">{{One row per account. Every row earns its place with a reason, never a
-       bare score.}}</p>
+       bare score. The top few carry a full card that opens on the row.}}</p>
     <div class="controls">
       <span class="controls-l">Filter</span>
       <button class="filter-btn active" data-seg="all">All</button>
@@ -266,42 +270,6 @@ table.board{width:100%;border-collapse:collapse;background:#fff;font-size:13px}
       <div class="factor">
         <div class="factor-h"><span class="factor-n">{{Factor}}</span><span class="factor-w">{{40}}%</span></div>
         <div class="factor-d">{{What it measures and where the number comes from.}}</div>
-      </div>
-    </div>
-  </section>
-
-  <section>
-    <h2 class="sec-h">Account cards</h2>
-    <p class="sec-sub">The top {{3–5}} expanded: the evidence, the angle, and who to call. The rest of
-       the board stays a row until someone asks.</p>
-    <div class="acards">
-      <!-- Duplicate per expanded account. -->
-      <div class="acard">
-        <div class="acard-h" onclick="toggleCard(this)">
-          <span class="acard-r">01</span>
-          <div class="acard-i">
-            <div class="acard-t">{{Account — the "so what" in one line}}</div>
-            <div class="acard-s">{{segment · ranking metric · strongest signal}}</div>
-          </div>
-          <span class="acard-c">▼</span>
-        </div>
-        <div class="acard-b">
-          <div class="evid"><div class="evid-l">Evidence</div><div class="evid-t">{{The counts and
-            the dated signal, with the org and the strongest posting hyperlinked to
-            <a class="lnk" href="{{SUMBLE_URL}}">Sumble</a>.}}</div></div>
-          <div class="cols">
-            <div class="col"><div class="col-l">The angle</div><p class="call">"{{One sentence in
-              the rep's voice: their situation, landing on the named product. No Sumble
-              vocabulary.}}"</p></div>
-            <div class="col"><div class="col-l">What to test</div><p>{{The discovery question.
-              <strong>Bold</strong> the qualifier.}}</p></div>
-          </div>
-          <div class="people">
-            <!-- 1-3 names, entry point first. Both links on every person. -->
-            <div class="pers entry"><span class="nm">{{Name}}</span><span class="rl">{{Title}}</span>
-              <span class="plinks"><a href="{{LINKEDIN_URL}}">LinkedIn</a><span class="sep">·</span><a href="{{SUMBLE_PERSON_URL}}">Sumble</a></span></div>
-          </div>
-        </div>
       </div>
     </div>
   </section>
@@ -356,11 +324,46 @@ const ACCOUNTS = [
       { t: "{{New VP Data · May 2026}}", kind: "hot" }
     ],
     why:  "{{One line: the play, the tech match, or the dated trigger.}}",
-    url:  "{{https://sumble.com/orgs/<slug>/overview}}"
+    url:  "{{https://sumble.com/orgs/<slug>/overview}}",
+    // Optional. Present on the top 3-5 only; those rows become expandable in place.
+    // Omit the whole key on every other row and it stays a plain row.
+    card: {
+      evid:  "{{The counts and the dated signal, with the org and the strongest posting hyperlinked to Sumble.}}",
+      angle: "{{One sentence in the rep's voice: their situation, landing on the named product. No Sumble vocabulary.}}",
+      test:  "{{The discovery question. <strong>Bold</strong> the qualifier.}}",
+      // 1-3 names, entry point first (entry: true draws the green treatment).
+      people: [
+        { nm: "{{Name}}", rl: "{{Title}}", li: "{{LINKEDIN_URL}}", su: "{{SUMBLE_PERSON_URL}}", entry: true }
+      ]
+    }
   }
 ];
 
 const tierClass = function (t) { return t === 1 ? "score t1" : t === 2 ? "score t2" : "score"; };
+const COLS = 7;   // keep in sync with the <thead> column count
+
+function cardHtml(a) {
+  const c = a.card;
+  const ppl = (c.people || []).map(function (p) {
+    const links = [
+      p.li ? '<a href="' + p.li + '">LinkedIn</a>' : "",
+      p.su ? '<a href="' + p.su + '">Sumble</a>' : ""
+    ].filter(Boolean).join('<span class="sep">&middot;</span>');
+    return '<div class="pers' + (p.entry ? " entry" : "") + '">'
+      + '<span class="nm">' + p.nm + "</span>"
+      + '<span class="rl">' + (p.rl || "") + "</span>"
+      + (links ? '<span class="plinks">' + links + "</span>" : "")
+      + "</div>";
+  }).join("");
+  return '<div class="dcard">'
+    + '<div class="evid"><div class="evid-l">Evidence</div><div class="evid-t">' + c.evid + "</div></div>"
+    + '<div class="cols">'
+    +   '<div class="col"><div class="col-l">The angle</div><p class="call">' + c.angle + "</p></div>"
+    +   '<div class="col"><div class="col-l">What to test</div><p>' + c.test + "</p></div>"
+    + "</div>"
+    + (ppl ? '<div class="people">' + ppl + "</div>" : "")
+    + "</div>";
+}
 
 function render(seg) {
   const rows = seg === "all" ? ACCOUNTS : ACCOUNTS.filter(function (a) { return a.seg === seg; });
@@ -370,18 +373,26 @@ function render(seg) {
     const tags = (a.tags || []).map(function (g) {
       return '<span class="tag ' + (g.kind || "") + '">' + g.t + "</span>";
     }).join("");
+    const has = !!a.card;
+    // The account name links out; the row toggles. Keep them separate so a click on
+    // the name still navigates instead of expanding.
     const name = a.url
-      ? '<a class="lnk co-name" href="' + a.url + '">' + a.name + "</a>"
+      ? '<a class="lnk co-name" href="' + a.url + '" onclick="event.stopPropagation()">' + a.name + "</a>"
       : '<span class="co-name">' + a.name + "</span>";
-    return "<tr>"
+    let out = '<tr class="brow' + (has ? " exp" : "") + '"'
+      + (has ? ' onclick="toggleRow(this)"' : "") + ">"
       + '<td><span class="rank">' + a.rank + "</span></td>"
-      + "<td>" + name + '<span class="co-meta">' + a.meta + "</span></td>"
+      + "<td>" + name + '<span class="co-meta">' + a.meta + "</span>"
+      +   (has ? '<span class="expandable">Open card<span class="chev">&#9660;</span></span>' : "")
+      + "</td>"
       + '<td><span class="tag">' + a.seg + "</span></td>"
       + '<td class="num"><b>' + a.metric + "</b></td>"
       + '<td><span class="' + tierClass(a.tier) + '">' + a.score + "</span></td>"
       + '<td><div class="tags">' + tags + "</div></td>"
       + '<td><div class="why">' + a.why + "</div></td>"
       + "</tr>";
+    if (has) out += '<tr class="drow"><td colspan="' + COLS + '">' + cardHtml(a) + "</td></tr>";
+    return out;
   }).join("");
 }
 
@@ -393,10 +404,12 @@ document.querySelectorAll(".filter-btn").forEach(function (btn) {
   });
 });
 
-function toggleCard(el) {
-  const b = el.nextElementSibling;
-  el.classList.toggle("open");
-  b.classList.toggle("open");
+// The detail row is always the next sibling of the row that owns it.
+function toggleRow(tr) {
+  const d = tr.nextElementSibling;
+  if (!d || !d.classList.contains("drow")) return;
+  tr.classList.toggle("open");
+  d.classList.toggle("open");
 }
 
 render("all");
