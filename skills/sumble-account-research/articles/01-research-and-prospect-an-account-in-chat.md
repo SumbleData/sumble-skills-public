@@ -8,8 +8,8 @@ The scoring and CRM skills build apps you run in a coding agent. This one is dif
 
 ## TLDR
 - It's a chat skill rather than a coding-agent skill: a single `SKILL.md` you upload to Claude (and adapt into a Custom GPT or a Gemini Gem). No local app, no terminal.
-- It runs the whole motion in conversation: pick an account (or brainstorm from your CRM territory), pull your internal context, rebuild Sumble's external view, then recommend teams, people, and a drafted email, ending in contact reveals and a push to your sequencer.
-- It asks first and pulls second, surfaces a first insight in seconds, and works one account at a time so you go deep instead of skimming a list.
+- It runs the whole motion in conversation: deep dive one account, or prioritize across the accounts in your CRM territory; pull your internal context, rebuild Sumble's external view, then recommend teams, people, and a drafted email, ending in contact reveals and a push to your sequencer.
+- **It asks one question, then runs.** Deep dive on a specific account, or prioritize across your accounts — asked before it touches a single tool, with the account name collected in the same message. Then it goes quiet and works to a finished deliverable, so you can start it and walk away.
 - To do anything real it needs the Sumble MCP connected. Without it you get a good plan; with it you get real people, signals, and emails.
 - It builds a reusable profile of your company and sales plays once, then loads it on every later run, so setup happens once.
 
@@ -17,12 +17,12 @@ The scoring and CRM skills build apps you run in a coding agent. This one is dif
 
 Open a chat, name an account, and the skill walks the play a good rep runs but rarely has time for:
 
-1. **Routes**: it asks whether you're working a specific account or brainstorming which to focus on. If brainstorming, it pulls your CRM-synced account list from Sumble (the one that refreshes on its own) and ranks the accounts by fit, with a reason each is compelling: a sales play, a tech match, a fresh hiring signal.
-2. **Loads your context**: it asks what you already know: call summaries (Gong, Fireflies), notes (Granola), CRM stage (Salesforce, HubSpot), marketing engagement. Internal context outranks anything external, so it drives everything downstream.
+1. **Scopes with a single question**: *deep dive on a specific account*, or *help me prioritize across my accounts* — plus the account name if you're deep diving. That's the only time it interrupts you; everything else is prescribed, not asked. The deliverable defaults to an account plan as an interactive HTML brief (say "outreach sequences", "a deck", or "prep me for my call" when you invoke it and it honors that instead), and your internal context is pulled automatically from whatever's connected. If you're prioritizing, it pulls your CRM-synced account list from Sumble (the one that refreshes on its own) and ranks the accounts on two axes: fit, and whether something just happened — with a reason each is compelling: a sales play, a tech match, a dated hiring signal.
+2. **Loads your context**: it pulls the account's state from whatever you have connected — call summaries (Gong, Fireflies), notes (Granola), CRM stage (Salesforce, HubSpot), marketing engagement — rather than interviewing you about it. Internal context outranks anything external, so it drives everything downstream.
 3. **Rebuilds the account's Sumble overview**: tech, teams, people, headcount, hiring signals, and ICP fit, assembled from the Sumble API and read through your sales plays.
-4. **Recommends and drafts**: the team to land or expand into, why now, the specific people to reach (economic buyer, champion, multi-thread), and a short, grounded email for each. Then it reveals emails and phone numbers and offers to push the contacts and drafts into your sequencer (Salesforce/Outreach/Salesloft, Apollo, SmartLead, HeyReach, Nooks).
+4. **Recommends and delivers**: the team to land or expand into, why now, and the buying group to reach (economic buyer, champion, multi-thread) — each name checked as currently at the company, carrying both a LinkedIn and a Sumble link and a confidence-scored reporting line. That group then gets rendered into whichever deliverable you picked. Only at the end does it offer to reveal emails and phone numbers and push the contacts and drafts into your sequencer (Salesforce/Outreach/Salesloft, Apollo, SmartLead, HeyReach, Nooks).
 
-It narrates each step, and it never spends a credit or sends anything without you in the loop.
+It narrates each phase, and it never spends a credit or sends anything without you in the loop.
 
 ## It's a web-app skill, not a coding-agent skill
 
@@ -54,10 +54,11 @@ If your platform can't reach Sumble at all yet, the skill is still useful as the
 
 A few things make it feel fast and keep it honest:
 
-- **First run builds your profile; every run after is instant.** The first time, it pulls your company profile from Sumble and asks you to paste or upload your sales enablement (plays, persona profiles, battlecards from Seismic / Saleshood / Highspot). It synthesizes those into a reusable **Sumble profile** and caches it. On later runs it loads that profile, plays it back to confirm it's current, and skips the setup entirely.
+- **First run builds your profile; every run after is instant.** Paste your sales enablement (plays, persona profiles, battlecards from Seismic / Saleshood / Highspot) alongside your answer and it combines that with your company profile from Sumble into a reusable **Sumble profile** and caches it. On later runs it loads that profile, auto-picks the play that fits the account's signals, and offers the swap at the end.
 - **The most durable cache is a companion skill.** Because chats are ephemeral, the skill can emit your profile as its own tiny `sumble-profile-<company>` skill that you upload once. Then it's available in every conversation, on every surface, with nothing to re-attach. (On Claude Code or a connected folder, a plain file works too.)
-- **It goes one account at a time.** Hand it a list and it researches them in turn rather than in parallel, going deep on each. You'll get a concrete hook on each account within seconds, before the deeper interview.
-- **Nothing leaves without your say-so.** Credit-spending steps are flagged first, and contacts are only revealed or pushed to a sequencer on your confirmation.
+- **Skipping the question doesn't stall it.** Skip and it takes the default — deep dive if you named a company, prioritize otherwise — tells you which one it took, and keeps going. Every decision it doesn't ask about has a documented prescription.
+- **Prioritizing rolls straight into the work.** Rank your book and it deep-dives the top three and builds the deliverable, rather than stopping to ask which one you meant.
+- **Nothing leaves without your say-so.** The two confirmations it does ask for — revealing contact details and pushing into a live sequence — both come after the deliverable already exists.
 
 ## The part that compounds
 

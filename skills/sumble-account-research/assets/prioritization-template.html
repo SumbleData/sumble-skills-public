@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{SELLER}} × {{TERRITORY}} · Top {{N}}</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<!--
+  ACCOUNT PRIORITIZATION. Many accounts, ranked, one page. Build it section by
+  section per references/prioritization-brief.md. Hold every line to
+  references/writing-rules.md.
+
+  Section spine (keep this order):
+    Funnel -> Ranked board -> Scoring model -> Account cards -> Traps & dead zone
+    -> Limits & method
+
+  Two rules that make this format work and are easy to skip:
+    1. The ranking basis goes in the SUBTITLE, never buried. A rep must be able to
+       argue with the method in the first five seconds.
+    2. Accounts live in the ACCOUNTS array and render client-side, so filtering is
+       instant and the file stays one portable .html.
+
+  Self-contained: no build step, no external assets except the Google font. The
+  Sumble mark is inlined by the publish step (see the Deliver section of
+  references/prioritization-brief.md) — a remote <img> is blocked by the artifact CSP.
+-->
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --green-50:#f0fdf4;--green-100:#dcfce7;--green-200:#bbf7d0;--green-600:#16a34a;--green-700:#15803d;--green-800:#166534;
+  --slate-50:#f8fafc;--slate-100:#f1f5f9;--slate-200:#e2e8f0;--slate-300:#cbd5e1;--slate-400:#94a3b8;--slate-500:#64748b;--slate-600:#475569;--slate-700:#334155;--slate-800:#1e293b;--slate-900:#0f172a;
+  --amber-50:#fffbeb;--amber-100:#fef3c7;--amber-200:#fde68a;--amber-700:#b45309;
+  --font-display:'Inter',system-ui,sans-serif;
+  --font-body:'Inter',system-ui,sans-serif;
+  --font-mono:'JetBrains Mono',ui-monospace,SFMono-Regular,monospace;
+}
+html{font-size:14px;scroll-behavior:smooth}
+body{font-family:var(--font-body);background:#fff;color:var(--slate-900);line-height:1.55;-webkit-font-smoothing:antialiased}
+a.lnk{color:var(--green-700);text-decoration:none;border-bottom:1px solid rgba(21,128,61,.32)}
+a.lnk:hover{border-color:var(--green-700)}
+:focus-visible{outline:2px solid var(--green-600);outline-offset:2px}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+.nav{background:#fff;border-bottom:2px solid var(--slate-100);padding:12px 32px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+.nav-left{display:flex;align-items:center;gap:12px}
+.nav-logo{display:flex;align-items:center;gap:9px}.nav-logo img{width:22px;height:22px;display:block}
+.nav-name{font-family:var(--font-display);font-size:15px;font-weight:600;letter-spacing:-.01em}
+.nav-sep{width:1px;height:16px;background:var(--slate-200)}
+.nav-title{font-family:var(--font-mono);font-size:11px;color:var(--slate-500);text-transform:uppercase;letter-spacing:.06em}
+.nav-meta{font-family:var(--font-mono);font-size:11px;color:var(--slate-400)}
+
+.hero{background:var(--slate-50);border-bottom:1px solid var(--slate-200);padding:44px 48px 36px}
+.hero-inner{max-width:1040px;margin:0 auto}
+.hero-eye{font-family:var(--font-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--green-700);margin-bottom:14px}
+.hero-rule{width:32px;height:3px;background:var(--green-600);border-radius:2px;margin-bottom:16px}
+.hero-h{font-family:var(--font-display);font-size:31px;font-weight:600;line-height:1.12;letter-spacing:-.02em;margin-bottom:10px;text-wrap:balance}
+/* THE RANKING BASIS. Non-negotiable: the rep has to be able to argue with it. */
+.hero-basis{font-family:var(--font-mono);font-size:12px;color:var(--slate-600);margin-bottom:22px;max-width:78ch}
+.hero-basis b{color:var(--green-700);font-weight:500}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(158px,1fr));gap:10px}
+.stat{background:#fff;border:1px solid var(--slate-200);border-radius:10px;padding:15px 17px}
+.stat .n{font-family:var(--font-display);font-size:25px;font-weight:600;letter-spacing:-.02em;line-height:1;font-variant-numeric:tabular-nums}
+.stat .n.up{color:var(--green-700)}
+.stat .l{font-size:12px;color:var(--slate-500);margin-top:5px}
+
+.page{max-width:1040px;margin:0 auto;padding:0 24px 80px}
+section{margin-top:48px}
+.sec-h{font-family:var(--font-display);font-size:19px;font-weight:600;letter-spacing:-.01em;margin-bottom:5px}
+.sec-sub{font-size:12.5px;color:var(--slate-500);margin-bottom:18px;max-width:74ch}
+
+/* funnel: give the list a denominator */
+.funnel{display:flex;align-items:stretch;flex-wrap:wrap;background:var(--slate-900);border-radius:11px;overflow:hidden;margin-top:34px}
+.fstep{flex:1 1 170px;padding:15px 22px;border-right:1px solid rgba(255,255,255,.08)}
+.fstep:last-child{border-right:0}
+.fstep-l{font-family:var(--font-mono);font-size:9.5px;font-weight:500;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.42);margin-bottom:5px}
+.fstep-n{font-family:var(--font-display);font-size:23px;font-weight:600;color:#fff;letter-spacing:-.02em;line-height:1;font-variant-numeric:tabular-nums}
+.fstep-n.hit{color:var(--green-200)}
+.fstep-d{font-size:10.5px;color:rgba(255,255,255,.4);margin-top:4px}
+
+/* insight bar: the one thing they could not have got from their own CRM */
+.insight{background:var(--green-50);border:1px solid var(--green-200);border-left:3px solid var(--green-600);border-radius:10px;padding:14px 17px;margin-top:18px}
+.insight-l{font-family:var(--font-mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--green-700);margin-bottom:7px}
+.insight p{font-size:13px;color:var(--slate-800)}
+.chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:9px}
+.chip{font-family:var(--font-mono);font-size:10.5px;background:#fff;border:1px solid var(--green-200);color:var(--green-800);border-radius:5px;padding:2px 8px}
+.chip.plain{border-color:var(--slate-200);color:var(--slate-500)}
+
+/* filters + ranked board */
+.controls{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+.controls-l{font-family:var(--font-mono);font-size:10px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:var(--slate-400);margin-right:3px}
+.filter-btn{font-family:var(--font-mono);font-size:11px;padding:6px 13px;border-radius:20px;border:1px solid var(--slate-200);background:#fff;color:var(--slate-500);cursor:pointer;transition:all .12s}
+.filter-btn:hover{border-color:var(--slate-300);color:var(--slate-700)}
+.filter-btn.active{background:var(--green-600);border-color:var(--green-600);color:#fff}
+.count-line{font-family:var(--font-mono);font-size:11px;color:var(--slate-400);margin-bottom:10px}
+.tbl-wrap{overflow-x:auto;border:1px solid var(--slate-200);border-radius:11px}
+table.board{width:100%;border-collapse:collapse;background:#fff;font-size:13px}
+.board thead tr{background:var(--slate-50)}
+.board th{text-align:left;padding:11px 14px;font-family:var(--font-mono);font-size:10px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:var(--slate-500);white-space:nowrap;border-bottom:1px solid var(--slate-200)}
+.board td{padding:11px 14px;border-bottom:1px solid var(--slate-100);vertical-align:middle}
+.board tbody tr:last-child td{border-bottom:0}
+.board tbody tr:hover{background:var(--slate-50)}
+.rank{font-family:var(--font-mono);font-size:12px;font-weight:600;color:var(--slate-400);font-variant-numeric:tabular-nums}
+.co-name{font-weight:600;display:block}
+.co-meta{font-size:11px;color:var(--slate-400);margin-top:1px}
+.num{font-family:var(--font-mono);font-size:13px;font-variant-numeric:tabular-nums;color:var(--slate-700)}
+.num b{color:var(--slate-900)}
+/* score pill: one accent, intensity by tier. No rainbow. */
+.score{font-family:var(--font-mono);font-size:12px;font-weight:600;padding:3px 9px;border-radius:20px;white-space:nowrap;background:var(--slate-100);color:var(--slate-600);border:1px solid var(--slate-200)}
+.score.t1{background:var(--green-600);color:#fff;border-color:var(--green-600)}
+.score.t2{background:var(--green-100);color:var(--green-800);border-color:var(--green-200)}
+.tag{font-family:var(--font-mono);font-size:10px;padding:2px 7px;border-radius:5px;background:var(--slate-100);color:var(--slate-600);border:1px solid var(--slate-200);white-space:nowrap}
+.tag.hot{background:var(--green-50);color:var(--green-800);border-color:var(--green-200)}
+.tag.warn{background:var(--amber-100);color:var(--amber-700);border-color:var(--amber-200)}
+.tags{display:flex;gap:4px;flex-wrap:wrap}
+.why{font-size:12px;color:var(--slate-600);max-width:34ch}
+
+/* scoring model */
+.model{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}
+.factor{border:1px solid var(--slate-200);border-radius:10px;padding:14px 16px}
+.factor-h{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:5px}
+.factor-n{font-family:var(--font-display);font-size:13.5px;font-weight:600}
+.factor-w{font-family:var(--font-mono);font-size:11px;color:var(--green-700);font-variant-numeric:tabular-nums}
+.factor-d{font-size:12px;color:var(--slate-600)}
+
+/* account cards: the top few, expanded */
+.acards{display:flex;flex-direction:column;gap:9px}
+.acard{border:1px solid var(--slate-200);border-radius:11px;overflow:hidden}
+.acard-h{display:flex;align-items:center;gap:13px;padding:14px 18px;cursor:pointer;user-select:none}
+.acard-h:hover,.acard-h.open{background:var(--slate-50)}
+.acard-r{font-family:var(--font-mono);font-size:17px;font-weight:500;color:var(--green-700);min-width:28px}
+.acard-i{flex:1;min-width:0}
+.acard-t{font-family:var(--font-display);font-size:14px;font-weight:600;line-height:1.3}
+.acard-s{font-family:var(--font-mono);font-size:11px;color:var(--slate-400);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.acard-c{font-family:var(--font-mono);font-size:10px;color:var(--slate-400);transition:transform .2s}
+.acard-h.open .acard-c{transform:rotate(180deg)}
+.acard-b{display:none;border-top:1px solid var(--slate-100);padding:17px 18px 18px 59px}
+.acard-b.open{display:block}
+.evid{background:var(--slate-50);border:1px solid var(--slate-200);border-left:3px solid var(--green-600);border-radius:8px;padding:13px 15px;margin-bottom:13px}
+.evid-l{font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--green-700);margin-bottom:6px}
+.evid-t{font-size:13px;color:var(--slate-800)}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.col-l{font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--slate-400);margin-bottom:6px}
+.col p{font-size:12.5px;color:var(--slate-600)}
+.col p strong{color:var(--slate-900);font-weight:600}
+.call{font-style:italic;color:var(--green-800);font-weight:500}
+.people{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+.pers{display:flex;flex-direction:column;gap:1px;border:1px solid var(--slate-200);border-radius:8px;padding:8px 11px;font-size:12px}
+.pers .nm{font-weight:600}
+.pers .rl{font-size:11px;color:var(--slate-500)}
+.pers.entry{background:var(--green-50);border-color:var(--green-200)}
+.plinks{font-family:var(--font-mono);font-size:10px;font-weight:500;white-space:nowrap;margin-top:3px}
+.plinks a{color:var(--slate-500);border-bottom:1px solid var(--slate-200);text-decoration:none}
+.plinks a:hover{color:var(--green-700);border-color:var(--green-700)}
+.plinks .sep{color:var(--slate-300);margin:0 4px}
+
+/* traps: what NOT to work. The part they cannot get anywhere else. */
+.traps{background:var(--amber-50);border:1px solid var(--amber-200);border-radius:10px;padding:16px 19px}
+.traps-l{font-family:var(--font-mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--amber-700);margin-bottom:9px}
+.trap{padding:8px 0;border-top:1px solid var(--amber-200);font-size:12.5px;color:var(--slate-700)}
+.trap:first-of-type{border-top:0}
+.trap b{color:var(--slate-900);font-weight:600}
+
+.limits{margin-top:46px;border-top:1px solid var(--slate-200);padding-top:18px}
+.limits-l{font-family:var(--font-mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--slate-400);margin-bottom:8px}
+.limits li{font-size:12px;color:var(--slate-600);margin-left:17px;margin-bottom:5px}
+
+.footer{background:var(--slate-900);border-top:3px solid var(--green-600);padding:22px 48px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px;margin-top:52px}
+.footer-left{font-family:var(--font-mono);font-size:11px;color:rgba(255,255,255,.5)}
+.footer-tag{font-family:var(--font-display);font-size:12px;color:rgba(255,255,255,.85);margin-top:2px}
+.footer-logo{display:flex;align-items:center;gap:8px}.footer-logo img{width:18px;height:18px;display:block}
+.footer-logo span{font-family:var(--font-display);font-size:13px;font-weight:600;color:rgba(255,255,255,.7)}
+.footer-right{font-family:var(--font-mono);font-size:10px;color:rgba(255,255,255,.45);text-align:right;line-height:1.7}
+@media(max-width:640px){.nav{padding:12px 16px}.hero{padding:32px 20px}.page{padding:0 16px 60px}.cols{grid-template-columns:1fr}.acard-b{padding:16px}.footer{padding:20px}.acard-s{display:none}}
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-left">
+    <div class="nav-logo"><img src="sumble-eyes-logo-512.png" alt="Sumble"><span class="nav-name">Sumble</span></div>
+    <div class="nav-sep"></div>
+    <span class="nav-title">Account prioritization · {{TERRITORY}} · {{MONTH_YEAR}}</span>
+  </div>
+  <span class="nav-meta">{{RECIPIENT}}</span>
+</nav>
+
+<div class="hero">
+  <div class="hero-inner">
+    <p class="hero-eye">{{SELLER}} · {{CONTEXT}} · {{MONTH_YEAR}}</p>
+    <div class="hero-rule"></div>
+    <!-- THESIS about the book, not a label. "The 20 best-fit accounts in Kati's DACH
+         book" beats "DACH account list", but a finding beats both: "Four of your top
+         ten are already running the competitor you displace." -->
+    <h1 class="hero-h">{{THESIS}}</h1>
+    <!-- THE RANKING BASIS. Ranked by what, over what population, with which filters
+         and exclusions. If a rep cannot argue with this line, the brief is a black box. -->
+    <p class="hero-basis">Ranked by <b>{{ranking metric}}</b> · {{population and geography}}
+       · Filter: {{the actual ICP predicate}} · Excludes {{exclusions}}</p>
+    <div class="stats">
+      <div class="stat"><div class="n">{{4,624}}</div><div class="l">{{metric across the board}}</div></div>
+      <div class="stat"><div class="n up">{{20/20}}</div><div class="l">{{qualifying condition}}</div></div>
+      <div class="stat"><div class="n">{{60+}}</div><div class="l">{{metric}}</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="page">
+
+  <!-- FUNNEL: the list needs a denominator, or "top 20" means nothing. -->
+  <div class="funnel">
+    <div class="fstep">
+      <div class="fstep-l">TAM</div>
+      <div class="fstep-n">{{222,900}}</div>
+      <div class="fstep-d">{{what defines it}}</div>
+    </div>
+    <div class="fstep">
+      <div class="fstep-l">SAM</div>
+      <div class="fstep-n">{{57,990}}</div>
+      <div class="fstep-d">{{the narrowing filter}}</div>
+    </div>
+    <div class="fstep">
+      <div class="fstep-l">ICP</div>
+      <div class="fstep-n hit">{{19,182}}</div>
+      <div class="fstep-d">{{the qualifying filter · top {{N}} shown below}}</div>
+    </div>
+  </div>
+
+  <div class="insight">
+    <div class="insight-l">Why this list is different</div>
+    <p>{{The one thing Sumble knows that their CRM does not. Title normalization,
+       subsidiary rollups, tech confirmed in postings — name it and show it.}}</p>
+    <div class="chips">
+      <span class="chip">{{Example → what it really is}}</span>
+      <span class="chip plain">{{…and so on}}</span>
+    </div>
+  </div>
+
+  <section>
+    <h2 class="sec-h">Ranked board</h2>
+    <p class="sec-sub">{{One row per account. Every row earns its place with a reason, never a
+       bare score.}}</p>
+    <div class="controls">
+      <span class="controls-l">Filter</span>
+      <button class="filter-btn active" data-seg="all">All</button>
+      <!-- One pill per segment present in the data. Generated by hand to keep the order stable. -->
+      <button class="filter-btn" data-seg="{{Segment}}">{{Segment}}</button>
+    </div>
+    <div class="count-line" id="countLine"></div>
+    <div class="tbl-wrap">
+      <table class="board">
+        <thead><tr>
+          <th>#</th><th>Account</th><th>Segment</th><th>{{Ranking metric}}</th>
+          <th>Score</th><th>Signals</th><th>Why it's on the list</th>
+        </tr></thead>
+        <tbody id="boardBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2 class="sec-h">Scoring model</h2>
+    <p class="sec-sub">The weights that produced the order above. Publish them so a rep can tell you
+       which one is wrong.</p>
+    <div class="model">
+      <!-- Duplicate per factor. Weights should sum to 100. -->
+      <div class="factor">
+        <div class="factor-h"><span class="factor-n">{{Factor}}</span><span class="factor-w">{{40}}%</span></div>
+        <div class="factor-d">{{What it measures and where the number comes from.}}</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2 class="sec-h">Account cards</h2>
+    <p class="sec-sub">The top {{3–5}} expanded: the evidence, the angle, and who to call. The rest of
+       the board stays a row until someone asks.</p>
+    <div class="acards">
+      <!-- Duplicate per expanded account. -->
+      <div class="acard">
+        <div class="acard-h" onclick="toggleCard(this)">
+          <span class="acard-r">01</span>
+          <div class="acard-i">
+            <div class="acard-t">{{Account — the "so what" in one line}}</div>
+            <div class="acard-s">{{segment · ranking metric · strongest signal}}</div>
+          </div>
+          <span class="acard-c">▼</span>
+        </div>
+        <div class="acard-b">
+          <div class="evid"><div class="evid-l">Evidence</div><div class="evid-t">{{The counts and
+            the dated signal, with the org and the strongest posting hyperlinked to
+            <a class="lnk" href="{{SUMBLE_URL}}">Sumble</a>.}}</div></div>
+          <div class="cols">
+            <div class="col"><div class="col-l">The angle</div><p class="call">"{{One sentence in
+              the rep's voice: their situation, landing on the named product. No Sumble
+              vocabulary.}}"</p></div>
+            <div class="col"><div class="col-l">What to test</div><p>{{The discovery question.
+              <strong>Bold</strong> the qualifier.}}</p></div>
+          </div>
+          <div class="people">
+            <!-- 1-3 names, entry point first. Both links on every person. -->
+            <div class="pers entry"><span class="nm">{{Name}}</span><span class="rl">{{Title}}</span>
+              <span class="plinks"><a href="{{LINKEDIN_URL}}">LinkedIn</a><span class="sep">·</span><a href="{{SUMBLE_PERSON_URL}}">Sumble</a></span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="traps">
+      <div class="traps-l">Traps &amp; dead zone</div>
+      <!-- What NOT to work, and why. This is the part a rep cannot get anywhere else,
+           and the part that makes them trust the rest of the page. -->
+      <div class="trap"><b>{{Account or pattern}}</b> — {{why it scores well and still isn't worth
+        the call.}}</div>
+      <div class="trap"><b>{{Excluded segment}}</b> — {{what was filtered out and the reason, so
+        nobody re-litigates it.}}</div>
+    </div>
+  </section>
+
+  <div class="limits">
+    <div class="limits-l">Limits &amp; method</div>
+    <ul class="limits">
+      <li>{{The exact query: fields, window, thresholds, exclusions. Name the job function ids
+        or technology slugs if that is what drove it.}}</li>
+      <li>Counts are job-post derived. Tech <em>used</em> is adoption; tech <em>mentioned</em> is a
+        mention.</li>
+      <li>{{Anything capped or truncated — a top-N cut, a sampled pool, a rank offset ceiling.
+        Say what was dropped; silent truncation reads as full coverage.}}</li>
+      <li>{{What would change the order, and what you would need to compute it.}}</li>
+    </ul>
+  </div>
+
+</div>
+
+<footer class="footer">
+  <div class="footer-left">{{TERRITORY}} · Sumble Intelligence · Confidential<div class="footer-tag">The right data, the right time.</div></div>
+  <div class="footer-logo"><img src="sumble-eyes-logo-512.png" alt="Sumble"><span>Sumble</span></div>
+  <div class="footer-right">{{AUTHOR}} · {{AUTHOR_EMAIL}}<br>sumble.com · {{MONTH_YEAR}}</div>
+</footer>
+
+<script>
+/* One row per account. Keep this the single source of truth for the board — do not
+   also hand-write <tr>s, or the two will drift. Every field here must trace to a
+   real query result; `why` is the one-line reason, never a restatement of `score`. */
+const ACCOUNTS = [
+  {
+    rank: 1,
+    name: "{{Account}}",
+    meta: "{{HQ · employees}}",
+    seg:  "{{Segment}}",
+    metric: "{{1,482}}",           // the ranking metric, pre-formatted
+    score: 92,                      // 0-100 from the scoring model
+    tier: 1,                        // 1 = top tier, 2 = strong, 3 = watch
+    tags: [                         // dated signals; kind: "hot" | "warn" | ""
+      { t: "{{New VP Data · May 2026}}", kind: "hot" }
+    ],
+    why:  "{{One line: the play, the tech match, or the dated trigger.}}",
+    url:  "{{https://sumble.com/orgs/<slug>/overview}}"
+  }
+];
+
+const tierClass = function (t) { return t === 1 ? "score t1" : t === 2 ? "score t2" : "score"; };
+
+function render(seg) {
+  const rows = seg === "all" ? ACCOUNTS : ACCOUNTS.filter(function (a) { return a.seg === seg; });
+  document.getElementById("countLine").textContent =
+    "Showing " + rows.length + " of " + ACCOUNTS.length + " accounts";
+  document.getElementById("boardBody").innerHTML = rows.map(function (a) {
+    const tags = (a.tags || []).map(function (g) {
+      return '<span class="tag ' + (g.kind || "") + '">' + g.t + "</span>";
+    }).join("");
+    const name = a.url
+      ? '<a class="lnk co-name" href="' + a.url + '">' + a.name + "</a>"
+      : '<span class="co-name">' + a.name + "</span>";
+    return "<tr>"
+      + '<td><span class="rank">' + a.rank + "</span></td>"
+      + "<td>" + name + '<span class="co-meta">' + a.meta + "</span></td>"
+      + '<td><span class="tag">' + a.seg + "</span></td>"
+      + '<td class="num"><b>' + a.metric + "</b></td>"
+      + '<td><span class="' + tierClass(a.tier) + '">' + a.score + "</span></td>"
+      + '<td><div class="tags">' + tags + "</div></td>"
+      + '<td><div class="why">' + a.why + "</div></td>"
+      + "</tr>";
+  }).join("");
+}
+
+document.querySelectorAll(".filter-btn").forEach(function (btn) {
+  btn.addEventListener("click", function () {
+    document.querySelectorAll(".filter-btn").forEach(function (b) { b.classList.remove("active"); });
+    btn.classList.add("active");
+    render(btn.dataset.seg);
+  });
+});
+
+function toggleCard(el) {
+  const b = el.nextElementSibling;
+  el.classList.toggle("open");
+  b.classList.toggle("open");
+}
+
+render("all");
+</script>
+</body>
+</html>

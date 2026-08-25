@@ -12,7 +12,7 @@ not a placeholder.
 | Tool | Purpose | Cost |
 |---|---|---|
 | `FindMatchAndEnrichOrganizations` | Find/match/enrich orgs — query filters or resolve names/URLs/IDs; request only needed attrs + tech/team/people/job metrics. | 1 cr/org + 1/paid attr + entity-metric costs |
-| `SearchSignals` | Search signals **across many accounts at once** — filters (AND-combined): `account_list_ids`, `organization_ids`, `person_ids`, `technology_slugs`, `job_functions`, `priorities`. Same signal payload as below; job-post signals add `suggested_contacts` (relevance-scored 1–10). Use for territory sweeps (Step 4) and per-person checks. | 1 cr/signal returned (free when none) |
+| `SearchSignals` | Search signals **across many accounts at once** — filters (AND-combined): `account_list_ids`, `organization_ids`, `person_ids`, `technology_slugs`, `job_functions`, `priorities`. Same signal payload as below; job-post signals add `suggested_contacts` (relevance-scored 1–10). Use for territory sweeps (Step 2) and per-person checks. | 1 cr/signal returned (free when none) |
 | `GetOrganizationSignals` | Recent sales triggers for one org `id` — champion/leadership moves, new hires on tracked tech, hiring/tech-adoption trends; each with `priority`, `date`, `sales_angle`, `sumble_url` (+ `person_id`/`job_post_id` to drill in). Optional `technology_slugs` filter. The "why now" when you already have one org id. | 1 cr/signal returned (free when none) |
 | `GetIntelligenceBrief` | LLM sales brief for one narrowed account. | **50 cr** |
 | `FindMatchAndEnrichJobs` | Find/enrich jobs — filters (incl. org-list scoping) or `job_id`s. `description` paid; optional `related_people`. | 1 cr/job + 1/paid attr (title free) + 1/related person |
@@ -46,10 +46,25 @@ with job filters; full state names; `job_title`/`job_description` aren't filtera
 `frontier-ai-models`, `processing-units-and-chips`,
 `cloud-and-container-orchestration-platforms`, `identity-and-access-management`.
 
+**Attribute validation traps.** These are hard 4xx errors, not warnings, and each costs a
+round trip:
+- `FindMatchAndEnrichPeople` **match mode**: `confidence` is valid only inside
+  `related_people`, and `person_score` is filter-mode only, so neither belongs in the
+  top-level `attributes`. Omitting the inner `related_people.attributes` returns bare ids
+  with no names and no scores.
+- `technology_category` entities accept only `job_post_count`,
+  `job_post_count_growth_1y`, `people_count`, `team_count`. `job_post_used_count` is
+  valid on a `technology` entity but not on a category.
+- `order_by_column: "people_concentration"` and `"people_count_growth_1y"` both require
+  `order_by_job_function`.
+
 **Cost discipline.** Free tools liberally; tighten org filters before enriching;
 one cheap jobs pass to find the why-now, then full `description` + `related_people`
 on the strongest only; email for top 2–3, phone (80 cr) for one and confirm;
 `GetIntelligenceBrief` (50 cr) only post-narrowing; on a 402, they're out of credits.
+**Resolve each org once** and capture `id`, `slug` and `sumble_url`, requesting the
+entity metrics (tech / teams / people / jobs) you need in that same call rather than
+re-matching later; every re-match is another credit per org.
 
 **Book-of-business pass** (pick a starting account from a big list): `GetMyCompanyProfile`
 → `ListOrganizationLists`/`GetOrganizationList` (or resolve pasted names) → one

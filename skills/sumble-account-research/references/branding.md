@@ -1,7 +1,9 @@
 # Brand styling (default for a plan / deck with no example)
 
-Use this **only when the user supplied no example** in Step 1. With an example, match
-*that* — ignore this file.
+Applies at Step 4, and **only to a deck or an account plan for which the user supplied no
+example**. With an example, match *that* and ignore this file. The interactive HTML briefs
+are Sumble-branded internal artifacts and skip this file entirely; see
+`references/deep-dive-brief.md` and `references/prioritization-brief.md`.
 
 **Brand it for the seller's own company — the company using this skill (the Sumble
 customer) — not for Sumble.** A deck is presented to the prospect under the seller's
@@ -14,12 +16,13 @@ rainbow.
 ## Get the seller's company brand (in this order)
 
 1. **Identify the company** from `GetMyCompanyProfile` (name + domain) — you already
-   have this from Step 3.
-2. **Ask for a brand kit / template** if you don't have one: a deck master/template,
-   brand colors (hex), logo file, or fonts. One quick ask — "Do you have a deck
-   template or brand colors/logo I should match?" — saves a redesign.
-3. **Derive a light brand** from their public website / logo if they have nothing
-   handy: their primary brand color + their logo (linked, not redrawn).
+   have this from Step 1.
+2. **Use a brand kit if they already gave you one** — a deck master, brand colors,
+   logo, or fonts they pasted or pointed at while context was being gathered in Step 1.
+   **Don't stop the run to ask for one**; the skill asks once and then goes quiet.
+3. **Derive a light brand** from their public website / logo, which is the normal
+   path: their primary brand color + their logo (linked, not redrawn). Say in one
+   line what you derived, and offer a re-skin at the close if they have a kit.
 4. **Fall back to a neutral professional design** (palette below) with the company
    **name** set prominently on the title slide / plan header — never invent a logo.
 

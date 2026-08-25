@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ACCOUNT}} × {{SELLER}} · Account Deep Dive</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<!--
+  SINGLE-ACCOUNT DEEP DIVE. One account, one page. Build it section by section per
+  references/deep-dive-brief.md. Hold every line to references/writing-rules.md.
+
+  Section spine (keep this order; it is the argument, not a layout):
+    Thesis -> Verdict -> Signal footprint -> Their stack -> Three doors -> Why now
+    -> The plays -> Who to contact first -> Messaging -> Evidence receipts
+    -> Limits & method
+
+  These sections map onto the five that `GetIntelligenceBrief` returns in its markdown
+  body, so the API can populate the page and the two speak one vocabulary:
+    What's the Angle          -> the <h1> thesis, and the Verdict
+    The Intel                 -> Signal footprint + Their stack
+    Which Teams Are The Best Fit -> Three doors (one door per team, with its lead)
+    Recent Changes            -> Why now
+    Who To Contact First      -> Who to contact first
+  The API also returns two things worth carrying through that no hand-built brief has:
+  a per-contact CRM status (Contact / Lead / no matching record) and a per-contact fit
+  score. Both render on the contact rows below.
+
+  Self-contained: no build step, no external assets except the Google font. The
+  Sumble mark is inlined by the publish step (see the Deliver section of
+  references/deep-dive-brief.md) — a remote <img> is blocked by the artifact CSP.
+-->
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --green-50:#f0fdf4;--green-100:#dcfce7;--green-200:#bbf7d0;--green-600:#16a34a;--green-700:#15803d;--green-800:#166534;
+  --slate-50:#f8fafc;--slate-100:#f1f5f9;--slate-200:#e2e8f0;--slate-300:#cbd5e1;--slate-400:#94a3b8;--slate-500:#64748b;--slate-600:#475569;--slate-700:#334155;--slate-800:#1e293b;--slate-900:#0f172a;
+  --amber-50:#fffbeb;--amber-200:#fde68a;--amber-700:#b45309;
+  --font-display:'Inter',system-ui,sans-serif;
+  --font-body:'Inter',system-ui,sans-serif;
+  --font-mono:'JetBrains Mono',ui-monospace,SFMono-Regular,monospace;
+}
+html{font-size:14px;scroll-behavior:smooth}
+body{font-family:var(--font-body);background:#fff;color:var(--slate-900);line-height:1.55;-webkit-font-smoothing:antialiased}
+a.lnk{color:var(--green-700);text-decoration:none;border-bottom:1px solid rgba(21,128,61,.32)}
+a.lnk:hover{border-color:var(--green-700)}
+:focus-visible{outline:2px solid var(--green-600);outline-offset:2px}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* nav */
+.nav{background:#fff;border-bottom:2px solid var(--slate-100);padding:12px 32px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+.nav-left{display:flex;align-items:center;gap:12px}
+.nav-logo{display:flex;align-items:center;gap:9px}.nav-logo img{width:22px;height:22px;display:block}
+.nav-name{font-family:var(--font-display);font-size:15px;font-weight:600;letter-spacing:-.01em}
+.nav-sep{width:1px;height:16px;background:var(--slate-200)}
+.nav-title{font-family:var(--font-mono);font-size:11px;color:var(--slate-500);text-transform:uppercase;letter-spacing:.06em}
+.nav-meta{font-family:var(--font-mono);font-size:11px;color:var(--slate-400)}
+
+/* hero: thesis + numbers. The h1 is an ARGUMENT, never a label. */
+.hero{background:var(--slate-50);border-bottom:1px solid var(--slate-200);padding:44px 48px 36px}
+.hero-inner{max-width:860px;margin:0 auto}
+.hero-eye{font-family:var(--font-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--green-700);margin-bottom:14px}
+.hero-rule{width:32px;height:3px;background:var(--green-600);border-radius:2px;margin-bottom:16px}
+.hero-h{font-family:var(--font-display);font-size:31px;font-weight:600;line-height:1.12;letter-spacing:-.02em;margin-bottom:12px;text-wrap:balance}
+.hero-sub{font-size:14.5px;color:var(--slate-600);max-width:66ch;margin-bottom:26px}
+.hero-sub strong{color:var(--slate-900);font-weight:600}
+
+/* stat tiles: 3-4, each a number with a direction. Never a bare count. */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(158px,1fr));gap:10px}
+.stat{background:#fff;border:1px solid var(--slate-200);border-radius:10px;padding:15px 17px}
+.stat .n{font-family:var(--font-display);font-size:25px;font-weight:600;letter-spacing:-.02em;line-height:1;font-variant-numeric:tabular-nums}
+.stat .n.up{color:var(--green-700)}
+.stat .l{font-size:12px;color:var(--slate-500);margin-top:5px}
+
+.page{max-width:860px;margin:0 auto;padding:0 24px 80px}
+section{margin-top:52px}
+.sec-h{font-family:var(--font-display);font-size:19px;font-weight:600;letter-spacing:-.01em;margin-bottom:5px}
+.sec-sub{font-size:12.5px;color:var(--slate-500);margin-bottom:20px;max-width:70ch}
+
+/* verdict: the call, up front, in one paragraph */
+.verdict{margin-top:38px;background:var(--green-50);border:1px solid var(--green-200);border-left:3px solid var(--green-600);border-radius:10px;padding:17px 20px}
+.verdict-l{font-family:var(--font-mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--green-700);margin-bottom:7px}
+.verdict p{font-size:14px;color:var(--slate-800)}
+
+/* telemetry: horizontal footprint bars. Accent = your tech / the play; grey = context. */
+.bars{display:flex;flex-direction:column;gap:9px}
+.bar-row{display:grid;grid-template-columns:minmax(120px,190px) 1fr 64px;align-items:center;gap:12px;font-size:13px}
+.bar-row .bname{text-align:right;font-weight:500;color:var(--slate-700)}
+.bar-row .track{background:var(--slate-100);border-radius:4px;height:21px;overflow:hidden}
+.bar-row .fill{height:100%;border-radius:4px;background:var(--slate-300)}
+.bar-row .fill.own{background:var(--green-600)}
+.bar-row .val{font-family:var(--font-mono);font-size:12px;color:var(--slate-500);font-variant-numeric:tabular-nums}
+.legend{display:flex;gap:18px;flex-wrap:wrap;font-size:12px;color:var(--slate-500);margin-bottom:14px}
+.legend span{display:flex;align-items:center;gap:6px}
+.sw{width:10px;height:10px;border-radius:2px}
+
+/* the estate: confirmed vs postings-only */
+.stack-tags{display:flex;gap:6px;flex-wrap:wrap}
+.um{font-family:var(--font-mono);font-size:10px;font-weight:500;padding:3px 8px;border-radius:5px;white-space:nowrap}
+.um-strong{background:var(--green-50);color:var(--green-800);border:1px solid var(--green-200)}
+.um-weak{background:var(--slate-100);color:var(--slate-500);border:1px solid var(--slate-200)}
+
+/* three doors: never hand the rep one way in */
+.doors{display:grid;grid-template-columns:repeat(auto-fit,minmax(232px,1fr));gap:14px}
+.door{border:1px solid var(--slate-200);border-radius:11px;padding:15px 17px;display:flex;flex-direction:column;gap:9px}
+.door-n{font-family:var(--font-mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--slate-400)}
+.door-t{font-family:var(--font-display);font-size:14px;font-weight:600;line-height:1.3}
+.door-w{font-size:12.5px;color:var(--slate-600)}
+/* The team this door goes through, and who leads it. A door without a team is a guess. */
+.door-team{font-size:11.5px;color:var(--slate-500);padding-bottom:2px}
+.door-team b{color:var(--slate-800);font-weight:600}
+.entry{background:var(--green-50);border:1px solid var(--green-200);border-radius:8px;padding:9px 11px}
+.entry-b{display:inline-block;font-family:var(--font-mono);font-size:9px;font-weight:500;letter-spacing:.05em;text-transform:uppercase;color:var(--green-800);background:#fff;border:1px solid var(--green-200);border-radius:99px;padding:2px 8px;margin-bottom:5px}
+.entry-nm{font-size:12.5px;font-weight:600}
+.entry-rl{font-size:11.5px;color:var(--slate-600)}
+.rollup{font-size:11px;color:var(--slate-500);border-left:1.5px dashed var(--slate-300);padding-left:10px}
+
+/* why now: dated, or it isn't a trigger */
+.whynow{display:flex;flex-direction:column;gap:9px}
+.trig{display:grid;grid-template-columns:88px 1fr;gap:13px;align-items:baseline;padding:11px 0;border-top:1px solid var(--slate-100)}
+.trig:first-child{border-top:0}
+.trig .d{font-family:var(--font-mono);font-size:11px;color:var(--green-700)}
+.trig .t{font-size:13px;color:var(--slate-700)}
+.trig .t b{color:var(--slate-900);font-weight:600}
+
+/* plays: filterable cards */
+.filters{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px}
+.filter-btn{font-family:var(--font-mono);font-size:11px;padding:6px 13px;border-radius:20px;border:1px solid var(--slate-200);background:#fff;color:var(--slate-500);cursor:pointer;transition:all .12s}
+.filter-btn:hover{border-color:var(--slate-300);color:var(--slate-700)}
+.filter-btn.active{background:var(--green-600);border-color:var(--green-600);color:#fff}
+.play{border:1px solid var(--slate-200);border-radius:11px;margin-bottom:9px;overflow:hidden}
+.play.hidden{display:none}
+.play-h{display:flex;align-items:center;gap:13px;padding:15px 19px;cursor:pointer;user-select:none}
+.play-h:hover,.play-h.open{background:var(--slate-50)}
+.play-n{font-family:var(--font-mono);font-size:17px;font-weight:500;color:var(--green-700);min-width:28px}
+.play-i{flex:1;min-width:0}
+.play-t{font-family:var(--font-display);font-size:14px;font-weight:600;line-height:1.3}
+.play-s{font-family:var(--font-mono);font-size:11px;color:var(--slate-400);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.play-b{font-family:var(--font-mono);font-size:10px;padding:4px 10px;border-radius:20px;background:var(--slate-100);color:var(--slate-600);border:1px solid var(--slate-200);white-space:nowrap}
+.play-c{font-family:var(--font-mono);font-size:10px;color:var(--slate-400);transition:transform .2s}
+.play-h.open .play-c{transform:rotate(180deg)}
+.play-body{display:none;border-top:1px solid var(--slate-100);padding:18px 19px 19px 60px}
+.play-body.open{display:block}
+.evid{background:var(--slate-50);border:1px solid var(--slate-200);border-left:3px solid var(--green-600);border-radius:8px;padding:13px 15px;margin-bottom:14px}
+.evid-l{font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--green-700);margin-bottom:6px}
+.evid-t{font-size:13px;color:var(--slate-800)}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.col-l{font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--slate-400);margin-bottom:6px}
+.col p{font-size:12.5px;color:var(--slate-600)}
+.col p strong{color:var(--slate-900);font-weight:600}
+.call{font-style:italic;color:var(--green-800);font-weight:500}
+.proof{display:block;margin-top:6px;font-family:var(--font-mono);font-size:10.5px;color:var(--slate-500);font-style:normal}
+
+/* buying group + reporting fan-out */
+.buygroup{margin-top:15px;margin-bottom:10px;padding:11px 13px;background:var(--slate-50);border:1px solid var(--slate-200);border-radius:8px}
+.bg-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.bg-lbl{font-family:var(--font-mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--green-700);font-weight:500}
+.bg-team{font-family:var(--font-display);font-size:13.5px;font-weight:600}
+.bg-roster{margin-left:auto;font-family:var(--font-mono);font-size:10.5px;color:var(--green-700);text-decoration:none;border-bottom:1px solid rgba(21,128,61,.32);white-space:nowrap}
+.bg-path{margin-top:7px;font-size:11.5px;color:var(--slate-600)}
+.bg-path .k{font-family:var(--font-mono);font-size:9px;text-transform:uppercase;letter-spacing:.06em;color:var(--slate-400);margin-right:7px}
+.contacts-label{font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--slate-400);margin-bottom:8px}
+.contact-row{display:flex;align-items:flex-start;gap:11px;padding:10px 12px;background:var(--slate-50);border:1px solid var(--slate-100);border-radius:8px;margin-bottom:6px}
+.contact-row:hover{border-color:var(--slate-300)}
+.contact-av{width:32px;height:32px;border-radius:50%;background:var(--slate-100);color:var(--slate-600);display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:10px;font-weight:600;flex-shrink:0}
+.contact-info{flex:1;min-width:0}
+.contact-name{font-size:12.5px;font-weight:600}
+.contact-title{font-size:11.5px;color:var(--slate-600)}
+.contact-loc{font-size:11px;color:var(--slate-400)}
+.contact-role{flex-shrink:0;align-self:flex-start;font-family:var(--font-mono);font-size:9px;font-weight:500;text-transform:uppercase;letter-spacing:.05em;padding:3px 7px;border-radius:5px;background:var(--green-50);color:var(--green-800);border:1px solid var(--green-200);white-space:nowrap}
+.contact-role.multi{background:var(--slate-100);color:var(--slate-600);border-color:var(--slate-200)}
+/* Contact-first order, CRM status and fit score. The two chips are semantic state, not
+   the accent: slate = already tracked, amber = whitespace worth flagging. */
+.contact-rank{flex-shrink:0;width:19px;font-family:var(--font-mono);font-size:11px;font-weight:600;color:var(--green-700);text-align:center;padding-top:8px;font-variant-numeric:tabular-nums}
+.contact-meta{display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:5px}
+.crm{font-family:var(--font-mono);font-size:9px;font-weight:500;text-transform:uppercase;letter-spacing:.05em;padding:2px 7px;border-radius:5px;white-space:nowrap;background:var(--slate-100);color:var(--slate-600);border:1px solid var(--slate-200)}
+.crm.white{background:var(--amber-50);color:var(--amber-700);border-color:var(--amber-200)}
+.fit{font-family:var(--font-mono);font-size:9px;font-weight:500;letter-spacing:.03em;padding:2px 7px;border-radius:5px;white-space:nowrap;background:#fff;color:var(--green-800);border:1px solid var(--green-200);font-variant-numeric:tabular-nums}
+.contact-chips{display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0}
+.plinks{font-family:var(--font-mono);font-size:10px;font-weight:500;white-space:nowrap}
+.plinks a{color:var(--slate-500);border-bottom:1px solid var(--slate-200);text-decoration:none}
+.plinks a:hover{color:var(--green-700);border-color:var(--green-700)}
+.plinks .sep{color:var(--slate-300);margin:0 5px}
+.contact-name .plinks{margin-left:7px;font-weight:500}
+.orgtree{margin-top:15px}
+.orgtree-label{font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--slate-400);margin-bottom:10px}
+.fan{margin-bottom:12px}
+.fan-anchor{display:flex;align-items:center;gap:8px;font-size:12px;padding:6px 10px;background:var(--green-50);border:1px solid var(--green-200);border-radius:7px}
+.fan-anchor .nm{font-weight:600}
+.fan-anchor .tt{color:var(--slate-600)}
+.fan-anchor .plinks{margin-left:auto}
+.fan-branch{margin:3px 0 0 17px;border-left:1.5px solid var(--slate-200);padding-left:13px}
+.fan-row{display:flex;align-items:center;gap:8px;padding:3px 0;font-size:11.5px;color:var(--slate-600);position:relative}
+.fan-row::before{content:"";position:absolute;left:-13px;top:50%;width:10px;height:1.5px;background:var(--slate-200)}
+.fan-row .plinks{margin-left:auto;padding-left:8px}
+.fan-dir{font-family:var(--font-mono);font-size:9px;width:13px;text-align:center;color:var(--green-700)}
+.fan-rank{font-family:var(--font-mono);font-size:10px;font-weight:600;color:var(--green-700);background:#fff;border:1px solid var(--green-200);border-radius:5px;width:30px;text-align:center;flex-shrink:0;font-variant-numeric:tabular-nums}
+.fan-row .nm{font-weight:600;color:var(--slate-800)}
+.fan-row .tt{color:var(--slate-500)}
+.fan-none{font-size:11px;color:var(--slate-400);font-style:italic;padding:3px 0 1px 13px;margin:3px 0 0 17px;border-left:1.5px dashed var(--slate-200)}
+
+/* persona playbook: one copy-ready message per door */
+.msgs{display:flex;flex-direction:column;gap:13px}
+.msg{border:1px solid var(--slate-200);border-radius:10px;overflow:hidden}
+.msg-head{display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--slate-50);padding:9px 16px;border-bottom:1px solid var(--slate-200)}
+.msg-to{font-size:12.5px;font-weight:600;color:var(--slate-800)}
+.msg-head button{font-family:var(--font-mono);font-size:11px;color:var(--slate-600);background:#fff;border:1px solid var(--slate-300);border-radius:6px;padding:4px 11px;cursor:pointer}
+.msg-head button:hover{border-color:var(--slate-500)}
+.msg-body{padding:14px 16px}
+.msg-body .subj{font-family:var(--font-mono);font-size:11.5px;color:var(--slate-500);margin-bottom:8px}
+.msg-body .subj b{color:var(--slate-800)}
+.msg-body p{font-size:13px;color:var(--slate-700)}
+
+/* evidence receipts */
+.receipts{width:100%;border-collapse:collapse;font-size:12.5px}
+.receipts th{text-align:left;font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--slate-400);font-weight:500;padding:0 12px 8px 0;border-bottom:1px solid var(--slate-200)}
+.receipts td{padding:9px 12px 9px 0;border-bottom:1px solid var(--slate-100);color:var(--slate-600);vertical-align:top}
+.receipts td:first-child{color:var(--slate-900);font-weight:500}
+.receipts .num{font-family:var(--font-mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.tbl-wrap{overflow-x:auto}
+
+/* limits & method: what this does not know */
+.limits{margin-top:52px;background:var(--amber-50);border:1px solid var(--amber-200);border-radius:10px;padding:16px 19px}
+.limits-l{font-family:var(--font-mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--amber-700);margin-bottom:8px}
+.limits li{font-size:12.5px;color:var(--slate-700);margin-left:17px;margin-bottom:5px}
+
+.footer{background:var(--slate-900);border-top:3px solid var(--green-600);padding:22px 48px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px;margin-top:56px}
+.footer-left{font-family:var(--font-mono);font-size:11px;color:rgba(255,255,255,.5)}
+.footer-tag{font-family:var(--font-display);font-size:12px;color:rgba(255,255,255,.85);margin-top:2px}
+.footer-logo{display:flex;align-items:center;gap:8px}.footer-logo img{width:18px;height:18px;display:block}
+.footer-logo span{font-family:var(--font-display);font-size:13px;font-weight:600;color:rgba(255,255,255,.7)}
+.footer-right{font-family:var(--font-mono);font-size:10px;color:rgba(255,255,255,.45);text-align:right;line-height:1.7}
+@media(max-width:640px){.nav{padding:12px 16px}.hero{padding:32px 20px}.page{padding:0 16px 60px}.cols{grid-template-columns:1fr}.play-body{padding:16px}.footer{padding:20px}.play-b,.play-s{display:none}.bar-row{grid-template-columns:104px 1fr 54px}}
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-left">
+    <div class="nav-logo"><img src="sumble-eyes-logo-512.png" alt="Sumble"><span class="nav-name">Sumble</span></div>
+    <div class="nav-sep"></div>
+    <span class="nav-title">Account deep dive · {{ACCOUNT}} · {{MONTH_YEAR}}</span>
+  </div>
+  <span class="nav-meta">{{RECIPIENT}}</span>
+</nav>
+
+<div class="hero">
+  <div class="hero-inner">
+    <p class="hero-eye">{{SELLER}} × {{ACCOUNT}} · {{CONTEXT}}</p>
+    <div class="hero-rule"></div>
+    <!-- THESIS, not a label. State the consequence: "IBM already owns the tools
+         Salesforce builds on." Never "Account overview: Salesforce". -->
+    <h1 class="hero-h">{{THESIS}}</h1>
+    <!-- Hard numbers in the first 200 words, each with a direction. -->
+    <p class="hero-sub">{{LEDE — 2-3 sentences carrying the strongest counts and YoY moves, <strong>bolded</strong>.}}</p>
+    <div class="stats">
+      <!-- 3-4 tiles. Add class "up" to the number when it is a growth figure. -->
+      <div class="stat"><div class="n up">{{+54.8%}}</div><div class="l">{{metric, with the window}}</div></div>
+      <div class="stat"><div class="n">{{370}}</div><div class="l">{{metric}}</div></div>
+      <div class="stat"><div class="n up">{{+36.7%}}</div><div class="l">{{metric}}</div></div>
+      <div class="stat"><div class="n">{{212}}</div><div class="l">{{metric}}</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="page">
+
+  <div class="verdict">
+    <div class="verdict-l">Verdict</div>
+    <p>{{One paragraph: work it or don't, and the single reason. A rep should be able to
+       read only this box and know what to do next.}}</p>
+  </div>
+
+  <section>
+    <!-- Feeds from the API brief's "The Intel" section. Named for what is on screen:
+         how big their footprint is in each technology, not "telemetry". -->
+    <h2 class="sec-h">Signal footprint</h2>
+    <p class="sec-sub">{{Job posts at {{ACCOUNT}} mentioning each technology or initiative.
+       {{employees}} employees · {{tracked posts}} tracked posts · {{teams}} teams.}}</p>
+    <div class="legend">
+      <span><span class="sw" style="background:var(--green-600)"></span>{{Your tech / the play}}</span>
+      <span><span class="sw" style="background:var(--slate-300)"></span>Context signal</span>
+    </div>
+    <div class="bars">
+      <!-- Widths are percentages of the largest row. Duplicate per technology,
+           biggest first. Add class "own" to the fill for your own / play-relevant tech. -->
+      <div class="bar-row"><div class="bname">{{Kubernetes}}</div><div class="track"><div class="fill" style="width:100%"></div></div><div class="val">{{2,149}}</div></div>
+      <div class="bar-row"><div class="bname">{{Terraform}}</div><div class="track"><div class="fill own" style="width:59.7%"></div></div><div class="val">{{1,283}}</div></div>
+      <div class="bar-row"><div class="bname">{{Vault + Consul}}</div><div class="track"><div class="fill own" style="width:1.7%;min-width:4px"></div></div><div class="val">{{37}}</div></div>
+    </div>
+    <p class="sec-sub" style="margin-top:18px;margin-bottom:0">{{Secondary wedge: the whitespace
+       the bars reveal — a category they are hiring against with no incumbent named.}}</p>
+  </section>
+
+  <section>
+    <h2 class="sec-h">Their stack</h2>
+    <p class="sec-sub">Confirmed in their profile versus named only in postings. A person's listed
+       technology is their experience, not proof the company runs it. The API brief does not
+       draw this line, so draw it here.</p>
+    <div class="stack-tags">
+      <!-- um-strong = confirmed adopted. um-weak = competitor / displacement, or postings-only. -->
+      <span class="um um-strong">{{Confirmed tech}}</span>
+      <span class="um um-weak">{{Competitor / postings-only}}</span>
+    </div>
+  </section>
+
+  <section>
+    <h2 class="sec-h">Three doors</h2>
+    <p class="sec-sub">Three independent ways in, so a cold door doesn't end the account. Each door
+       is a real team, named with its lead, plus the entry point and who rolls up to them.</p>
+    <div class="doors">
+      <!-- Duplicate per door. Two is acceptable; one is not a door, it's a single point of
+           failure. This section absorbs the API brief's "Which Teams Are The Best Fit": each
+           best-fit team becomes a door, and the team's lead goes in .door-team. A door with no
+           named team is a guess, so cut it rather than ship it. -->
+      <div class="door">
+        <div class="door-n">Door 01</div>
+        <div class="door-t">{{What this door is: the function and the wedge}}</div>
+        <div class="door-team">Team <b>{{Team name}}</b> · led by {{Lead name}}</div>
+        <div class="door-w">{{Why this door opens: the evidence behind it.}}</div>
+        <div class="entry">
+          <span class="entry-b">Entry point</span>
+          <div class="entry-nm"><a class="lnk" href="{{SUMBLE_PERSON_URL}}">{{Name}}</a></div>
+          <div class="entry-rl">{{Title}}</div>
+        </div>
+        <div class="rollup">{{N directors + N managers}} · {{surnames, comma separated}}</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2 class="sec-h">Why now</h2>
+    <p class="sec-sub">Every line dated. An undated trigger is not a trigger.</p>
+    <div class="whynow">
+      <!-- Duplicate per trigger, newest first. -->
+      <div class="trig"><div class="d">{{Jun 2026}}</div><div class="t">{{<b>What happened</b>, and the consequence for this deal.}}</div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2 class="sec-h">The plays</h2>
+    <p class="sec-sub">One card per play. Filter pills are the seller's own named plays from the
+       Step 1 profile; drop them and keep "All plays" if the profile has none.</p>
+    <div class="filters">
+      <button class="filter-btn active" data-filter="all" onclick="setFilter('all',this)">All plays</button>
+      <button class="filter-btn" data-filter="{{PLAY_SLUG}}" onclick="setFilter('{{PLAY_SLUG}}',this)">{{Play name}}</button>
+    </div>
+
+    <!-- Duplicate .play per play. data-play must match a pill's data-filter. -->
+    <div class="play" data-play="{{PLAY_SLUG}}">
+      <div class="play-h" onclick="togglePlay(this)">
+        <span class="play-n">01</span>
+        <div class="play-i">
+          <div class="play-t">{{The "so what" in one line — a consequence, not a topic}}</div>
+          <div class="play-s">{{team · one-line evidence}}</div>
+        </div>
+        <span class="play-b">{{Play name}}</span>
+        <span class="play-c">▼</span>
+      </div>
+      <div class="play-body">
+        <div class="evid"><div class="evid-l">Evidence</div><div class="evid-t">{{Lead with the
+          confirmed tech or hiring signal. Hyperlink the org and the single strongest posting to
+          <a class="lnk" href="{{SUMBLE_JOB_URL}}">Sumble</a>. Counts live here, never in the call line.}}</div></div>
+        <div class="cols">
+          <div class="col"><div class="col-l">The call</div><p class="call">"{{Open on their
+            situation, land on the named product or module. No Sumble vocabulary — the prospect
+            has never heard of Sumble.}}"<span class="proof">{{Reference customer · concrete
+            outcome — only if you actually have one}}</span></p></div>
+          <div class="col"><div class="col-l">What to test</div><p>{{The discovery question as
+            curiosity, not a second pitch. <strong>Bold</strong> the key qualifier.}}</p></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <!-- Was "Buying group". Renamed to the question the rep actually asks, which is the API
+         brief's "Who To Contact First" framing. The buying-group STRUCTURE stays: role chips
+         and the scored reporting fan-out. Order the rows by who to approach first, 01 down. -->
+    <h2 class="sec-h">Who to contact first</h2>
+    <p class="sec-sub">Ordered, not listed. Only people currently at the company: verify each name
+       before it goes on the page, because a departed champion discredits the whole brief.</p>
+    <div class="buygroup">
+      <div class="bg-head">
+        <span class="bg-lbl">Team</span>
+        <span class="bg-team">{{Team name}}</span>
+        <!-- Real navigable Sumble team, from a contact's matched_features team slug:
+             https://sumble.com/orgs/{{ORG_SLUG}}/teams/{{TEAM_SLUG}}/people
+             No curated team (common under ~250 employees) -> use the org people page below
+             and say so in .bg-path. -->
+        <a class="bg-roster" href="https://sumble.com/orgs/{{ORG_SLUG}}/people">See who Sumble links to this org →</a>
+      </div>
+      <div class="bg-path"><span class="k">Path in</span>{{champion}} (champion) → {{economic buyer}} (economic buyer)</div>
+    </div>
+    <div class="contacts-label">In order</div>
+    <!-- 2-3 people, best first. Every row carries: a rank, LinkedIn + the API's sumble_url,
+         a role chip, a CRM-status chip, and a fit score.
+         CRM status comes straight from the API brief's "(CRM Status: Contact / Lead)" or
+         "(No matching CRM record)". Use class "crm white" for no match, because an unknown
+         name at a live account is whitespace the rep should see, not a blank.
+         Fit score is the person's score from the same source. Omit the chip rather than
+         guess a number. -->
+    <div class="contact-row">
+      <span class="contact-rank">01</span>
+      <div class="contact-av">{{IN}}</div>
+      <div class="contact-info">
+        <div class="contact-name">{{Full Name}}<span class="plinks"><a href="{{LINKEDIN_URL}}">LinkedIn</a><span class="sep">·</span><a href="{{SUMBLE_PERSON_URL}}">Sumble</a></span></div>
+        <div class="contact-title">{{Verified current title}} · started {{Mon YYYY}}</div>
+        <div class="contact-loc">{{Location · why this person, and why they're first}}</div>
+        <div class="contact-meta">
+          <span class="crm">{{In CRM · Contact}}</span>
+          <span class="fit">Fit {{82}}</span>
+        </div>
+      </div>
+      <div class="contact-chips">
+        <span class="contact-role">{{Economic buyer / Champion}}</span>
+      </div>
+    </div>
+    <!-- Whitespace variant: nobody in the CRM has this person. -->
+    <div class="contact-row">
+      <span class="contact-rank">02</span>
+      <div class="contact-av">{{IN}}</div>
+      <div class="contact-info">
+        <div class="contact-name">{{Full Name}}<span class="plinks"><a href="{{LINKEDIN_URL}}">LinkedIn</a><span class="sep">·</span><a href="{{SUMBLE_PERSON_URL}}">Sumble</a></span></div>
+        <div class="contact-title">{{Verified current title}} · started {{Mon YYYY}}</div>
+        <div class="contact-loc">{{Location · why this person}}</div>
+        <div class="contact-meta">
+          <span class="crm white">Not in CRM</span>
+          <span class="fit">Fit {{74}}</span>
+        </div>
+      </div>
+      <div class="contact-chips">
+        <span class="contact-role multi">Multithread</span>
+      </div>
+    </div>
+
+    <div class="orgtree">
+      <div class="orgtree-label">Who rolls up to them · Sumble confidence 1–10</div>
+      <!-- ONE .fan per contact, no exceptions. Rows are direct_reports from
+           FindMatchAndEnrichPeople match mode, related_people:{direction:["direct_reports"],
+           attributes:[...,"confidence"]}. Rank = ceil(confidence.score*100)/10. Top ~5.
+           No mapped reports or a noisy line -> .fan-none saying why. Self-check before
+           delivering: count(.contact-row) == count(.fan). -->
+      <div class="fan">
+        <div class="fan-anchor"><span class="nm">{{Name}}</span> · <span class="tt">{{Title}}</span><span class="plinks"><a href="{{LINKEDIN_URL}}">LinkedIn</a><span class="sep">·</span><a href="{{SUMBLE_PERSON_URL}}">Sumble</a></span></div>
+        <div class="fan-branch">
+          <div class="fan-row"><span class="fan-dir">▼</span><span class="fan-rank">{{6.5}}</span><span class="nm">{{Name}}</span> · <span class="tt">{{Title}}</span><span class="plinks"><a href="{{LINKEDIN_URL}}">LinkedIn</a><span class="sep">·</span><a href="{{SUMBLE_PERSON_URL}}">Sumble</a></span></div>
+        </div>
+      </div>
+      <div class="fan">
+        <div class="fan-anchor"><span class="nm">{{Name}}</span> · <span class="tt">{{Title}}</span><span class="plinks"><a href="{{LINKEDIN_URL}}">LinkedIn</a><span class="sep">·</span><a href="{{SUMBLE_PERSON_URL}}">Sumble</a></span></div>
+        <div class="fan-none">{{No reports mapped in Sumble — reach directly, or warm-intro via the champion.}}</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <!-- Was "Persona playbook", which promised more than three emails delivers. -->
+    <h2 class="sec-h">Messaging</h2>
+    <p class="sec-sub">One message per door, in the rep's voice, leading with the prospect's own
+       numbers. Copy-ready. Keep it to about five sentences: name one or two people, quote one
+       dated fact, state the angle, and close with a low-friction offer.</p>
+    <div class="msgs">
+      <!-- Duplicate per door. Give each .msg-body a unique id and pass it to cp(). -->
+      <div class="msg">
+        <div class="msg-head"><span class="msg-to">{{Name}} — {{the wedge}}</span><button onclick="cp(this,'m1')">Copy</button></div>
+        <div class="msg-body" id="m1">
+          <div class="subj"><b>Subject:</b> {{Six words, their number in it}}</div>
+          <p>{{Four sentences. Their situation, the consequence, what you do about it, one ask.}}</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2 class="sec-h">Evidence receipts</h2>
+    <p class="sec-sub">Every number above, with the link that proves it. This is what makes the brief
+       usable in front of the customer.</p>
+    <div class="tbl-wrap">
+      <table class="receipts">
+        <thead><tr><th>Claim</th><th>Figure</th><th>Source</th></tr></thead>
+        <tbody>
+          <!-- Duplicate per claim. -->
+          <tr><td>{{Claim}}</td><td class="num">{{1,283}}</td><td><a class="lnk" href="{{SUMBLE_URL}}">{{Sumble · what it shows}}</a></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <div class="limits">
+    <div class="limits-l">Limits &amp; method</div>
+    <ul class="limits">
+      <li>{{The filter that produced this: the exact query, window, and exclusions.}}</li>
+      <li>Reporting lines are inferred from shared signals (tech, function, team, title, location) —
+        the same 1–10 shown on each person's Sumble page. A suggested map, not a confirmed org chart.
+        Verify before referencing anyone in outreach.</li>
+      <li>Tech <em>used</em> is adoption; tech <em>mentioned</em> is a mention. Postings-only tools
+        are tagged as such above.</li>
+      <li>{{What this brief does not cover, and what would change the verdict.}}</li>
+    </ul>
+  </div>
+
+</div>
+
+<footer class="footer">
+  <div class="footer-left">{{ACCOUNT}} · Sumble Intelligence · Confidential<div class="footer-tag">The right data, the right time.</div></div>
+  <div class="footer-logo"><img src="sumble-eyes-logo-512.png" alt="Sumble"><span>Sumble</span></div>
+  <div class="footer-right">{{AUTHOR}} · {{AUTHOR_EMAIL}}<br>sumble.com · {{MONTH_YEAR}}</div>
+</footer>
+
+<script>
+function togglePlay(el){const b=el.nextElementSibling;el.classList.toggle('open');b.classList.toggle('open');}
+function setFilter(play,btn){
+  document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('.play').forEach(card=>{
+    if(play==='all'||card.dataset.play===play){card.classList.remove('hidden');}
+    else{card.classList.add('hidden');
+      const h=card.querySelector('.play-h'),b=card.querySelector('.play-body');
+      if(h)h.classList.remove('open');if(b)b.classList.remove('open');}
+  });
+}
+function cp(btn,id){
+  const el=document.getElementById(id);
+  navigator.clipboard.writeText(el.innerText).then(function(){
+    btn.textContent='Copied';setTimeout(function(){btn.textContent='Copy';},1500);
+  });
+}
+</script>
+</body>
+</html>
