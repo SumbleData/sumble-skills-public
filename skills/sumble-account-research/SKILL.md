@@ -3,6 +3,9 @@ name: sumble-account-research
 description: "Research and prospect accounts using Sumble's MCP and other context auto-pulled from live connectors. Opens with a single question, fired before any tool call: deep dive on a specific account, or help me prioritize across my accounts (plus the account name for a deep dive). Output defaults to an account plan rendered as an interactive HTML brief. However, other outputs are also possible: outreach sequences, a deck for a meeting, call prep when the invocation asks for them."
 ---
 
+Always respond to the user in simple, plain language, following the principles of
+ISO 24495-1:2023.
+
 If the Sumble MCP isn't available, stop and get them set up first: point them at
 https://docs.sumble.com/api/mcp for the endpoint and token, and tell them to run
 `/mcp` in Claude Code (or add the server in their client's MCP settings) and

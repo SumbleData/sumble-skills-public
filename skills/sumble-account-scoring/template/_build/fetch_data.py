@@ -59,6 +59,11 @@ import sumble_v6
 BATCH = 100
 MIN_BATCH = 20  # adaptive-split floor: below this, a persistent failure is fatal
 PAGE = 200  # filter mode: endpoint max limit per page
+# Rank pagination floor. An expensive filter clause — a many-term `technology IN`
+# OR'd with `technology_category IN`, say — can serve happily at a smaller limit
+# and fail outright at PAGE. `rank_stratum` halves down to this before giving up,
+# for the same reason `_fetch_orgs` halves enrichment batches.
+MIN_PAGE = 25
 RANK_PAGE_CAP = 40  # base cap on filter pages scanned per stratum (scaled to quota)
 
 # Stratified whitespace preselection weights (policy constant; same spec → same
@@ -293,22 +298,44 @@ def rank_stratum(
     `people_count_growth_1y`) and ignored by the org-level columns."""
     select = {"attributes": ["id", "name", "url"], "entities": []}
     out: list[dict] = []
-    page_cap = max(RANK_PAGE_CAP, (want + PAGE - 1) // PAGE * 4 + 5)
-    for page in range(page_cap):
-        if len(out) >= want:
-            break
+    page_size = PAGE
+    offset = 0
+    scanned = 0
+    # Scaled off MIN_PAGE, not PAGE: a halved page size needs proportionally more
+    # pages to reach `want`, and the cap must not be what stops us short.
+    page_cap = max(RANK_PAGE_CAP, (want + MIN_PAGE - 1) // MIN_PAGE * 4 + 5)
+    while scanned < page_cap and len(out) < want:
         body = {
             "filter": {"query": query},
             "select": select,
             "order_by_column": order_col,
             "order_by_direction": "DESC",
-            "limit": PAGE,
-            "offset": page * PAGE,
+            "limit": page_size,
+            "offset": offset,
         }
         if order_job_function:
             body["order_by_job_function"] = order_job_function
         resp = post(api_key, body, fatal=False)
+        scanned += 1
         if not resp:
+            # `post` has already exhausted its own retries, so a big page for an
+            # expensive clause can fail repeatedly under load and then succeed
+            # later — it is load-dependent, not a hard limit. Either way, halve
+            # and retry the SAME offset: no rows are skipped, and one costly
+            # clause no longer forfeits the stratum. Breaking out here is what
+            # made a timeout indistinguishable from "no more matches" — the
+            # caller printed a benign `got 0` and the pool silently lost 20%.
+            if page_size > MIN_PAGE:
+                page_size = max(MIN_PAGE, page_size // 2)
+                print(
+                    f"[rank]   page failed at offset {offset}; "
+                    f"retrying that page with limit {page_size}"
+                )
+                continue
+            print(
+                f"[rank]   page failed at offset {offset} even at limit {MIN_PAGE} — "
+                f"stopping this stratum with {len(out)}/{want}"
+            )
             break
         orgs = resp.get("organizations") or []
         if not orgs:
@@ -322,8 +349,9 @@ def rank_stratum(
             out.append({"name": a.get("name") or "", "url": a.get("url") or ""})
             if len(out) >= want:
                 break
-        if len(orgs) < PAGE:
+        if len(orgs) < page_size:
             break
+        offset += page_size
     return out
 
 
